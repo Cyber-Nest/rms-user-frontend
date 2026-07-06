@@ -1,9 +1,14 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { X, Plus, Minus, Check, MessageSquare, ChefHat } from 'lucide-react';
-import { MenuItem, ModifierGroup, ModifierOption, SelectedModifier } from '../types';
-import { useCart } from '../context/CartContext';
+import React, { useState, useEffect, useMemo } from "react";
+import { X, Plus, Minus, Check, MessageSquare, ChefHat } from "lucide-react";
+import {
+  MenuItem,
+  ModifierGroup,
+  ModifierOption,
+  SelectedModifier,
+} from "../types";
+import { useCart } from "../context/CartContext";
 
 interface ModifierModalProps {
   item: MenuItem | null;
@@ -11,29 +16,36 @@ interface ModifierModalProps {
   onClose: () => void;
 }
 
-export default function ModifierModal({ item, isOpen, onClose }: ModifierModalProps) {
+export default function ModifierModal({
+  item,
+  isOpen,
+  onClose,
+}: ModifierModalProps) {
   const { addToCart } = useCart();
   const [quantity, setQuantity] = useState(1);
-  const [selections, setSelections] = useState<Record<string, ModifierOption[]>>({});
+  const [selections, setSelections] = useState<
+    Record<string, ModifierOption[]>
+  >({});
   const [activeIdx, setActiveIdx] = useState(0);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState("");
 
   // Reset/Initialize default selections when item opens
   useEffect(() => {
     if (!item) return;
     setQuantity(1);
     setActiveIdx(0);
-    setNote('');
+    setNote("");
 
     const init: Record<string, ModifierOption[]> = {};
     const initGroup = (g: ModifierGroup) => {
       if (!g || !g.options) return;
       const defs = g.options.filter((o) => o.isDefault);
-      const selected = defs.length > 0
-        ? defs
-        : g.required && g.maxSelection === 1 && g.options.length > 0
-          ? [g.options[0]]
-          : [];
+      const selected =
+        defs.length > 0
+          ? defs
+          : g.required && g.maxSelection === 1 && g.options.length > 0
+            ? [g.options[0]]
+            : [];
       init[g.id] = selected;
 
       // Recurse nested groups
@@ -55,18 +67,30 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
       const activeTabEl = document.getElementById(`mod-tab-${activeIdx}`);
       if (activeTabEl) {
         activeTabEl.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'center'
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
         });
       }
     }, 50);
     return () => clearTimeout(timer);
   }, [activeIdx, isOpen]);
 
+  // Lock background scroll when open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
+
   const activeGroup = useMemo(
     () => item?.modifierGroups?.[activeIdx] ?? null,
-    [item, activeIdx]
+    [item, activeIdx],
   );
 
   // Recursively collect all active modifier groups (including nested groups for selected options)
@@ -119,11 +143,14 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
         o.modifierGroups.forEach((subG) => {
           if (newSelections[subG.id] === undefined) {
             const defs = subG.options.filter((so) => so.isDefault);
-            newSelections[subG.id] = defs.length > 0
-              ? defs
-              : subG.required && subG.maxSelection === 1 && subG.options.length > 0
-                ? [subG.options[0]]
-                : [];
+            newSelections[subG.id] =
+              defs.length > 0
+                ? defs
+                : subG.required &&
+                    subG.maxSelection === 1 &&
+                    subG.options.length > 0
+                  ? [subG.options[0]]
+                  : [];
             newSelections[subG.id].forEach(initNested);
           }
         });
@@ -158,7 +185,7 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
   const handleAddToCart = () => {
     if (!isValid()) return;
     const selectedMods: SelectedModifier[] = [];
-    
+
     allActiveGroups.forEach((g) => {
       const isRoot = item.modifierGroups?.some((rg) => rg.id === g.id) ?? false;
       const opts = selections[g.id] ?? [];
@@ -198,14 +225,18 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
           <div>
             <h4
               className={`font-bold tracking-wide ${
-                isRoot ? "text-xs text-neutral-800" : "text-xs text-brand-primary"
+                isRoot
+                  ? "text-xs text-neutral-800"
+                  : "text-xs text-brand-primary"
               }`}
             >
               {displayName}
-              {g.required && <span className="text-red-500 ml-1 font-bold">*</span>}
+              {g.required && (
+                <span className="text-red-500 ml-1 font-bold">*</span>
+              )}
             </h4>
             <p className="text-[10px] text-neutral-400 font-medium mt-0.5">
-              {g.required ? `Select at least ${g.minSelection}` : "Optional"} 
+              {g.required ? `Select at least ${g.minSelection}` : "Optional"}
               {g.maxSelection > 1 ? ` (Max ${g.maxSelection})` : ""}
             </p>
           </div>
@@ -218,7 +249,7 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {g.options.map((opt) => {
             const sel = isSelected(g.id, opt.id);
-            const isCard = g.displayType === 'card';
+            const isCard = g.displayType === "card";
             return (
               <div key={opt.id} className="flex flex-col">
                 <button
@@ -236,7 +267,9 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
                       className={`w-4 h-4 border flex items-center justify-center flex-shrink-0 transition-all ${
                         g.maxSelection === 1 ? "rounded-full" : "rounded"
                       } ${
-                        sel ? "bg-brand-primary border-brand-primary text-white" : "border-neutral-300 bg-white"
+                        sel
+                          ? "bg-brand-primary border-brand-primary text-white"
+                          : "border-neutral-300 bg-white"
                       }`}
                     >
                       {sel && <Check size={10} strokeWidth={3} />}
@@ -247,10 +280,15 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
                   {isCard && (
                     <div className="w-10 h-10 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200 flex-shrink-0">
                       <img
-                        src={opt.image || item.image || "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60"}
+                        src={
+                          opt.image ||
+                          item.image ||
+                          "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60"
+                        }
                         alt={opt.name}
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60";
+                          (e.target as HTMLImageElement).src =
+                            "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60";
                         }}
                         className="w-full h-full object-cover"
                       />
@@ -274,7 +312,9 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
                       className={`absolute top-2 right-2 w-4 h-4 border flex items-center justify-center transition-all ${
                         g.maxSelection === 1 ? "rounded-full" : "rounded"
                       } ${
-                        sel ? "bg-brand-primary border-brand-primary text-white" : "border-neutral-300"
+                        sel
+                          ? "bg-brand-primary border-brand-primary text-white"
+                          : "border-neutral-300"
                       }`}
                     >
                       {sel && <Check size={10} strokeWidth={3} />}
@@ -293,7 +333,10 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
             return (
               <div key={`child-of-${opt.id}`} className="space-y-3.5 pl-2">
                 {opt.modifierGroups.map((childG) =>
-                  renderModifierGroup(childG, isRoot ? opt.name : `${pathName} › ${opt.name}`)
+                  renderModifierGroup(
+                    childG,
+                    isRoot ? opt.name : `${pathName} › ${opt.name}`,
+                  ),
                 )}
               </div>
             );
@@ -318,10 +361,8 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
         - Desktop: Slides from right, occupies full height, w-[45rem], rounded-l-2xl
       */}
       <div className="relative w-full md:max-w-[46rem] md:h-full bg-white rounded-t-3xl md:rounded-t-none md:rounded-l-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row z-10 h-[88vh] animate-slide-up-mobile md:animate-drawer-slide-in">
-        
         {/* LEFT COLUMN: Customizer Options */}
         <div className="flex-1 flex flex-col bg-white overflow-hidden min-h-0">
-          
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 flex-shrink-0">
             <div className="flex items-center gap-2.5">
@@ -337,7 +378,7 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
                 </h3>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-bold text-neutral-400 bg-neutral-50 px-2 py-1 rounded-md border border-neutral-200/40">
                 Group {activeIdx + 1} of {item.modifierGroups?.length ?? 1}
@@ -351,9 +392,9 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
             </div>
           </div>
 
-          {/* Modifier Tabs Indicator (Scrollable horizontally) */}
+          {/* Modifier Tabs Indicator (Wrapping list) */}
           {item.modifierGroups && item.modifierGroups.length > 0 && (
-            <div className="flex overflow-x-auto no-scrollbar gap-2 px-5 py-3 border-b border-neutral-100/50 bg-neutral-50/50 flex-shrink-0">
+            <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-neutral-100/50 bg-neutral-50/50 flex-shrink-0">
               {item.modifierGroups.map((g, i) => {
                 const active = i === activeIdx;
                 const count = (selections[g.id] ?? []).length;
@@ -372,13 +413,17 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
                     {count > 0 ? (
                       <span
                         className={`text-[8px] px-1.5 py-0.5 rounded-full font-black ${
-                          active ? "bg-white/20 text-white" : "bg-brand-primary/10 text-brand-primary"
+                          active
+                            ? "bg-white/20 text-white"
+                            : "bg-brand-primary/10 text-brand-primary"
                         }`}
                       >
                         {count}
                       </span>
                     ) : (
-                      g.required && <span className="text-red-500 ml-0.5 font-bold">*</span>
+                      g.required && (
+                        <span className="text-red-500 ml-0.5 font-bold">*</span>
+                      )
                     )}
                   </button>
                 );
@@ -433,7 +478,12 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
               </span>
               <button
                 onClick={() =>
-                  setActiveIdx(Math.min((item.modifierGroups?.length ?? 1) - 1, activeIdx + 1))
+                  setActiveIdx(
+                    Math.min(
+                      (item.modifierGroups?.length ?? 1) - 1,
+                      activeIdx + 1,
+                    ),
+                  )
                 }
                 disabled={activeIdx === (item.modifierGroups?.length ?? 1) - 1}
                 className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
@@ -455,7 +505,6 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
         */}
         <div className="hidden md:flex md:w-[35%] flex-col bg-neutral-50 p-5 justify-between overflow-hidden border-l border-neutral-200/50 flex-shrink-0">
           <div className="flex-1 flex flex-col min-h-0 space-y-4 mb-4">
-            
             {/* Base Item description */}
             <div className="pb-3 border-b border-neutral-200 flex-shrink-0 flex gap-2.5">
               {item.image && (
@@ -482,7 +531,10 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
               <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest sticky top-0 bg-neutral-50 pb-1 flex items-center justify-between">
                 <span>Selections</span>
                 <span className="bg-brand-primary-light text-brand-primary px-2 py-0.5 rounded-full text-[8.5px] font-extrabold border border-brand-primary/15">
-                  {allActiveGroups.reduce((acc, g) => acc + (selections[g.id] ?? []).length, 0)}
+                  {allActiveGroups.reduce(
+                    (acc, g) => acc + (selections[g.id] ?? []).length,
+                    0,
+                  )}
                 </span>
               </p>
 
@@ -495,9 +547,14 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
                       {g.name}
                     </p>
                     {opts.map((o) => (
-                      <div key={o.id} className="flex items-center gap-1.5 text-brand-primary pl-1 text-[11px]">
+                      <div
+                        key={o.id}
+                        className="flex items-center gap-1.5 text-brand-primary pl-1 text-[11px]"
+                      >
                         <span className="font-bold">✓</span>
-                        <span className="text-neutral-700 font-medium">{o.name}</span>
+                        <span className="text-neutral-700 font-medium">
+                          {o.name}
+                        </span>
                         {o.price > 0 && (
                           <span className="text-[9.5px] text-neutral-400 ml-auto">
                             +${o.price.toFixed(2)}
@@ -509,7 +566,10 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
                 );
               })}
 
-              {allActiveGroups.reduce((acc, g) => acc + (selections[g.id] ?? []).length, 0) === 0 && (
+              {allActiveGroups.reduce(
+                (acc, g) => acc + (selections[g.id] ?? []).length,
+                0,
+              ) === 0 && (
                 <p className="text-[10px] text-neutral-400 italic">
                   No customization chosen yet.
                 </p>
@@ -534,7 +594,9 @@ export default function ModifierModal({ item, isOpen, onClose }: ModifierModalPr
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-[10.5px] font-bold text-neutral-600">Quantity</span>
+              <span className="text-[10.5px] font-bold text-neutral-600">
+                Quantity
+              </span>
               <div className="flex items-center gap-2.5 border border-neutral-200 bg-white rounded-lg px-2 py-0.5">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}

@@ -1,27 +1,30 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
-import toast from 'react-hot-toast';
-import { 
-  ShoppingBag, 
-  Search, 
-  MapPin, 
-  Phone, 
-  Clock, 
-  ChevronRight, 
-  Trash2, 
-  Plus, 
-  Minus, 
-  Flame, 
+import React, { useState, useEffect, useMemo } from "react";
+import axios from "axios";
+import toast from "react-hot-toast";
+import {
+  ShoppingBag,
+  Search,
+  MapPin,
+  Phone,
+  Clock,
+  ChevronRight,
+  Trash2,
+  Plus,
+  Minus,
+  Flame,
   Info,
   Maximize2,
-  X
-} from 'lucide-react';
-import { Category, MenuItem } from '../types';
-import { useCart } from '../context/CartContext';
-import ModifierModal from '../components/ModifierModal';
-import { fallbackCategories, fallbackMenuItems } from '../data/menuData';
+  X,
+  ChefHat,
+} from "lucide-react";
+import { Category, MenuItem } from "../types";
+import { useCart } from "../context/CartContext";
+import ModifierModal from "../components/ModifierModal";
+import CheckoutModal from "../components/CheckoutModal";
+import OrderStatusModal from "../components/OrderStatusModal";
+import { fallbackCategories, fallbackMenuItems } from "../data/menuData";
 
 export default function HomePage() {
   const {
@@ -40,37 +43,42 @@ export default function HomePage() {
     clearCart,
     isCartOpen,
     setIsCartOpen,
-    addToCart
+    addToCart,
   } = useCart();
 
   // Menu states
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('popular');
-  const [addressInput, setAddressInput] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("popular");
+  const [addressInput, setAddressInput] = useState("");
   const [showAddressModal, setShowAddressModal] = useState(false);
 
   // Customizer modal state
   const [activeItem, setActiveItem] = useState<MenuItem | null>(null);
+
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [activeOrder, setActiveOrder] = useState<any | null>(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
 
   // Fetch Menu from API (with local fallback)
   useEffect(() => {
     async function loadMenu() {
       setLoading(true);
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
         const res = await axios.get(`${apiUrl}/menu/pos-feed`);
         if (res.data.success) {
           setCategories(res.data.data.categories);
           setMenuItems(res.data.data.menuItems);
         } else {
-          throw new Error('API failed');
+          throw new Error("API failed");
         }
       } catch (err) {
-        console.warn('API Error, loading fallback static menu items', err);
+        console.warn("API Error, loading fallback static menu items", err);
         setCategories(fallbackCategories);
         setMenuItems(fallbackMenuItems);
       } finally {
@@ -87,30 +95,96 @@ export default function HomePage() {
     }
   }, [address]);
 
+  // Load active order from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedOrder = localStorage.getItem("cd_active_order");
+      if (savedOrder) {
+        try {
+          setActiveOrder(JSON.parse(savedOrder));
+          setShowStatusModal(true); // Open tracker automatically on load
+        } catch (e) {
+          console.error("Failed to parse active order", e);
+        }
+      }
+    }
+  }, []);
+
+  const handlePlaceOrder = async (orderPayload: any) => {
+    try {
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+      const res = await axios.post(`${apiUrl}/orders`, orderPayload);
+      if (res.data.success) {
+        const createdOrder = res.data.data;
+        setActiveOrder(createdOrder);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("cd_active_order", JSON.stringify(createdOrder));
+        }
+        clearCart();
+        setShowCheckoutModal(false);
+        setShowStatusModal(true);
+        toast.success("Order placed successfully!");
+      } else {
+        throw new Error(res.data.message || "Failed to place order");
+      }
+    } catch (err) {
+      console.warn(
+        "API connection failed, falling back to local simulation",
+        err,
+      );
+      // Fallback local simulation payload
+      const mockOrder = {
+        ...orderPayload,
+        _id: "mock-" + Math.random().toString(36).substr(2, 9),
+        orderNumber: String(Math.floor(100 + Math.random() * 900)),
+        createdAt: new Date().toISOString(),
+      };
+      setActiveOrder(mockOrder);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("cd_active_order", JSON.stringify(mockOrder));
+      }
+      clearCart();
+      setShowCheckoutModal(false);
+      setShowStatusModal(true);
+      toast.success("Order placed successfully (Demo mode)!");
+    }
+  };
+
+  const handleDismissActiveOrder = () => {
+    setActiveOrder(null);
+    setShowStatusModal(false);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("cd_active_order");
+    }
+  };
+
   // Filter & Sort Items
   const filteredItems = useMemo(() => {
     let list = menuItems;
-    
+
     // Category filter
-    if (selectedCategory !== 'all') {
+    if (selectedCategory !== "all") {
       list = list.filter((item) => item.categoryId === selectedCategory);
     }
 
     // Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter((item) => 
-        item.name.toLowerCase().includes(q) || 
-        item.description.toLowerCase().includes(q)
+      list = list.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          item.description.toLowerCase().includes(q),
       );
     }
 
     // Sort list
     return [...list].sort((a, b) => {
-      if (sortBy === 'popular') return (b.isPopular ? 1 : 0) - (a.isPopular ? 1 : 0);
-      if (sortBy === 'price-low') return a.price - b.price;
-      if (sortBy === 'price-high') return b.price - a.price;
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === "popular")
+        return (b.isPopular ? 1 : 0) - (a.isPopular ? 1 : 0);
+      if (sortBy === "price-low") return a.price - b.price;
+      if (sortBy === "price-high") return b.price - a.price;
+      if (sortBy === "name") return a.name.localeCompare(b.name);
       return 0;
     });
   }, [menuItems, selectedCategory, searchQuery, sortBy]);
@@ -120,7 +194,7 @@ export default function HomePage() {
       setActiveItem(item);
     } else {
       // Add directly to cart if no modifiers exist
-      addToCart(item, [], 1, '');
+      addToCart(item, [], 1, "");
     }
   };
 
@@ -134,22 +208,20 @@ export default function HomePage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-brand-bg text-neutral-900 font-sans select-none">
-      
       {/* ── HEADER NAVIGATION ── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
-        
         {/* Brand Logo */}
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-brand-primary rounded-xl flex items-center justify-center text-white shadow-md shadow-brand-primary/25 transform rotate-0 hover:rotate-0 transition-transform">
-            <span className="font-extrabold text-lg">CD</span>
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 bg-brand-primary rounded-xl flex items-center justify-center text-white shadow-md shadow-brand-primary/25 flex-shrink-0 animate-fade-in">
+            <ChefHat size={18} strokeWidth={2.5} />
           </div>
-          <div>
-            <h1 className="text-sm font-black tracking-tight text-neutral-900 leading-none">
-              CHICKEN DELIGHT
-            </h1>
-            <p className="text-[9px] font-bold text-brand-primary tracking-widest mt-0.5">
-              ONLINE ORDERING
-            </p>
+          <div className="flex flex-col leading-none">
+            <span className="font-display font-medium text-[15px] text-neutral-800 tracking-tight">
+              Chicken
+            </span>
+            <span className="font-display font-medium text-[10px] text-brand-primary tracking-[0.2em] mt-0.5">
+              DELIGHT
+            </span>
           </div>
         </div>
 
@@ -157,24 +229,24 @@ export default function HomePage() {
         <div className="hidden md:flex items-center gap-3.5 bg-neutral-100 p-1 rounded-xl border border-neutral-200/50">
           <div className="flex bg-white shadow-sm rounded-lg overflow-hidden border border-neutral-200/30">
             <button
-              onClick={() => setOrderType('takeout')}
+              onClick={() => setOrderType("takeout")}
               className={`px-3 py-1.5 text-[10px] font-bold transition-all cursor-pointer ${
-                orderType === 'takeout'
-                  ? 'bg-brand-primary text-white'
-                  : 'text-neutral-500 hover:text-neutral-800'
+                orderType === "takeout"
+                  ? "bg-brand-primary text-white"
+                  : "text-neutral-500 hover:text-neutral-800"
               }`}
             >
               Pickup
             </button>
             <button
               onClick={() => {
-                setOrderType('delivery');
+                setOrderType("delivery");
                 if (!address) setShowAddressModal(true);
               }}
               className={`px-3 py-1.5 text-[10px] font-bold transition-all cursor-pointer ${
-                orderType === 'delivery'
-                  ? 'bg-brand-primary text-white'
-                  : 'text-neutral-500 hover:text-neutral-800'
+                orderType === "delivery"
+                  ? "bg-brand-primary text-white"
+                  : "text-neutral-500 hover:text-neutral-800"
               }`}
             >
               Delivery
@@ -187,7 +259,7 @@ export default function HomePage() {
           >
             <MapPin size={13} className="text-brand-primary" />
             <span className="max-w-[160px] truncate">
-              {address ? address : 'Set Delivery Address'}
+              {address ? address : "Set Delivery Address"}
             </span>
             <ChevronRight size={10} className="opacity-50" />
           </button>
@@ -195,6 +267,20 @@ export default function HomePage() {
 
         {/* Shopping Cart Summary Trigger */}
         <div className="flex items-center gap-3">
+          {activeOrder && (
+            <button
+              type="button"
+              onClick={() => setShowStatusModal(true)}
+              className="relative flex items-center gap-1.5 bg-white hover:bg-neutral-50 text-neutral-800 px-3 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all active:scale-[0.97] cursor-pointer border border-neutral-200/80 shadow-sm whitespace-nowrap"
+            >
+              <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-brand-primary"></span>
+              </span>
+              <span>Track Order</span>
+            </button>
+          )}
+
           <button
             onClick={() => setIsCartOpen(!isCartOpen)}
             className="relative flex items-center gap-2 bg-brand-primary text-white hover:bg-brand-primary-hover px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-[0.97] cursor-pointer shadow-md shadow-brand-primary/10"
@@ -211,25 +297,32 @@ export default function HomePage() {
       </header>
 
       {/* Mobile Address Selection strip */}
-      <div className="md:hidden flex items-center justify-between px-4 py-2.5 bg-neutral-100 border-b border-neutral-200 text-xs">
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setOrderType(orderType === 'takeout' ? 'delivery' : 'takeout')}
-            className="bg-white border border-neutral-200 px-2.5 py-1 rounded-lg font-bold text-neutral-700 capitalize"
+      <div className="md:hidden flex items-center justify-between px-4 py-2.5 bg-brand-primary-light border-b border-brand-primary-muted/20 text-xs shadow-sm">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() =>
+              setOrderType(orderType === "takeout" ? "delivery" : "takeout")
+            }
+            className="flex-shrink-0 bg-brand-primary text-white text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wider cursor-pointer active:scale-95 transition-transform"
           >
             {orderType}
           </button>
           <button
+            type="button"
             onClick={() => setShowAddressModal(true)}
-            className="flex items-center gap-1 text-neutral-600 font-medium truncate max-w-[180px]"
+            className="flex items-center gap-1.5 text-neutral-700 font-semibold truncate text-[11px] min-w-0 flex-1 cursor-pointer"
           >
-            <MapPin size={11} className="text-brand-primary flex-shrink-0" />
-            <span className="truncate">{address ? address : 'Add Address'}</span>
+            <MapPin size={12} className="text-brand-primary flex-shrink-0" />
+            <span className="truncate">
+              {orderType === "delivery" ? (address ? address : "Set Delivery Address") : "Strathmore Branch Counter"}
+            </span>
           </button>
         </div>
         <button
+          type="button"
           onClick={() => setShowAddressModal(true)}
-          className="text-[10px] font-bold text-brand-primary"
+          className="text-[10px] font-black text-brand-primary uppercase tracking-wider ml-3 flex-shrink-0 hover:underline cursor-pointer"
         >
           Change
         </button>
@@ -239,8 +332,8 @@ export default function HomePage() {
       <section className="bg-white border-b border-neutral-200 px-4 sm:px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-2xl bg-neutral-50 border border-neutral-200 overflow-hidden flex-shrink-0 hidden sm:block">
-            <img 
-              src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=200&auto=format&fit=crop&q=60" 
+            <img
+              src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=200&auto=format&fit=crop&q=60"
               alt="Restaurant facade"
               className="w-full h-full object-cover"
             />
@@ -250,8 +343,12 @@ export default function HomePage() {
               <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
                 Open Now
               </span>
-              <span className="text-[10px] text-neutral-400 font-medium">·</span>
-              <span className="text-[10px] text-neutral-500 font-semibold">11:00 AM - 10:00 PM</span>
+              <span className="text-[10px] text-neutral-400 font-medium">
+                ·
+              </span>
+              <span className="text-[10px] text-neutral-500 font-semibold">
+                11:00 AM - 10:00 PM
+              </span>
             </div>
             <h2 className="text-base font-black text-neutral-900 mt-1 leading-tight">
               Chicken Delight - Strathmore Branch
@@ -281,15 +378,14 @@ export default function HomePage() {
 
       {/* ── CATEGORY STICKY BAR & SEARCH ── */}
       <div className="sticky top-[61px] md:top-[63px] z-30 bg-brand-bg border-b border-neutral-200 px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-        
         {/* Category Carousel */}
         <div className="flex-1 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2">
           <button
-            onClick={() => setSelectedCategory('all')}
+            onClick={() => setSelectedCategory("all")}
             className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              selectedCategory === 'all'
-                ? 'bg-neutral-800 text-white shadow-sm'
-                : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+              selectedCategory === "all"
+                ? "bg-neutral-800 text-white shadow-sm"
+                : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
             }`}
           >
             All Items
@@ -300,8 +396,8 @@ export default function HomePage() {
               onClick={() => setSelectedCategory(cat.id)}
               className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 selectedCategory === cat.id
-                  ? 'bg-neutral-800 text-white shadow-sm'
-                  : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                  ? "bg-neutral-800 text-white shadow-sm"
+                  : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
               }`}
             >
               {cat.name}
@@ -312,7 +408,10 @@ export default function HomePage() {
         {/* Search & Sort Panel */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="relative w-full sm:w-[180px]">
-            <Search className="absolute left-3 top-2.5 text-neutral-400" size={13} />
+            <Search
+              className="absolute left-3 top-2.5 text-neutral-400"
+              size={13}
+            />
             <input
               type="text"
               value={searchQuery}
@@ -337,14 +436,16 @@ export default function HomePage() {
 
       {/* ── MAIN CONTAINER (SPLIT SCREEN LAYOUT) ── */}
       <div className="flex-1 flex overflow-hidden p-4 sm:p-6 gap-6 min-h-0">
-        
         {/* LEFT COLUMN: PRODUCT GRID (75% on Desktop) */}
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
           {loading ? (
             /* Loading skeletons */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {Array.from({ length: 6 }).map((_, idx) => (
-                <div key={idx} className="flex flex-col bg-white rounded-2xl border border-neutral-200/60 overflow-hidden p-3.5 gap-3 animate-pulse">
+                <div
+                  key={idx}
+                  className="flex flex-col bg-white rounded-2xl border border-neutral-200/60 overflow-hidden p-3.5 gap-3 animate-pulse"
+                >
                   <div className="h-[120px] w-full bg-neutral-100 rounded-xl" />
                   <div className="flex-1 space-y-2">
                     <div className="h-3 w-2/3 bg-neutral-100 rounded" />
@@ -361,7 +462,8 @@ export default function HomePage() {
           ) : filteredItems.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {filteredItems.map((item) => {
-                const hasModifiers = item.modifierGroups && item.modifierGroups.length > 0;
+                const hasModifiers =
+                  item.modifierGroups && item.modifierGroups.length > 0;
                 return (
                   <div
                     key={item.id}
@@ -370,17 +472,24 @@ export default function HomePage() {
                     {/* Food Image Container */}
                     <div className="relative h-[95px] w-[95px] sm:h-[130px] sm:w-full bg-neutral-50 rounded-xl overflow-hidden flex-shrink-0">
                       <img
-                        src={item.image || "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=300&auto=format&fit=crop&q=60"}
+                        src={
+                          item.image ||
+                          "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=300&auto=format&fit=crop&q=60"
+                        }
                         alt={item.name}
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=300&auto=format&fit=crop&q=60";
+                          (e.target as HTMLImageElement).src =
+                            "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=300&auto=format&fit=crop&q=60";
                         }}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       {/* Badge (e.g. Popular, New) */}
                       {item.badge && (
                         <span className="absolute top-2 left-2 bg-brand-primary text-white text-[8px] sm:text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-sm">
-                          <Flame size={9} className="fill-white animate-pulse" />
+                          <Flame
+                            size={9}
+                            className="fill-white animate-pulse"
+                          />
                           {item.badge}
                         </span>
                       )}
@@ -400,15 +509,19 @@ export default function HomePage() {
                       {/* Pricing & CTA Button */}
                       <div className="flex justify-between items-center mt-1 border-t border-neutral-50 pt-2 sm:pt-2.5">
                         <div>
-                          <p className="text-[8.5px] sm:text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Price</p>
-                          <p className="text-[12px] sm:text-[14px] font-black text-neutral-800">${item.price.toFixed(2)}</p>
+                          <p className="text-[8.5px] sm:text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                            Price
+                          </p>
+                          <p className="text-[12px] sm:text-[14px] font-black text-neutral-800">
+                            ${item.price.toFixed(2)}
+                          </p>
                         </div>
                         <button
                           onClick={() => handleOpenModifiers(item)}
                           className="bg-brand-primary text-white hover:bg-brand-primary-hover px-2.5 py-1.5 sm:p-2.5 rounded-lg sm:rounded-xl shadow-md shadow-brand-primary/10 active:scale-90 transition-all flex items-center justify-center gap-1 cursor-pointer font-bold text-[10px] sm:text-xs"
                         >
                           <Plus size={12} strokeWidth={3} />
-                          <span>{hasModifiers ? 'Customize' : 'Add'}</span>
+                          <span>{hasModifiers ? "Customize" : "Add"}</span>
                         </button>
                       </div>
                     </div>
@@ -417,13 +530,18 @@ export default function HomePage() {
               })}
             </div>
           ) : (
-
             /* Empty Filter Search View */
             <div className="flex flex-col items-center justify-center h-48 border border-dashed border-neutral-300/80 rounded-2xl p-6 text-center bg-white">
               <span className="text-3xl mb-2">🧐</span>
-              <h4 className="text-xs font-bold text-neutral-700">No dishes match your filters</h4>
+              <h4 className="text-xs font-bold text-neutral-700">
+                No dishes match your filters
+              </h4>
               <p className="text-[10px] text-neutral-400 mt-1 max-w-[240px] leading-relaxed">
-                Could not find any items matching &ldquo;{searchQuery}&rdquo; in our {categories.find(c => c.id === selectedCategory)?.name || 'menus'}.
+                Could not find any items matching &ldquo;{searchQuery}&rdquo; in
+                our{" "}
+                {categories.find((c) => c.id === selectedCategory)?.name ||
+                  "menus"}
+                .
               </p>
             </div>
           )}
@@ -448,7 +566,7 @@ export default function HomePage() {
           </div>
 
           {/* Cart items scrollbox */}
-          <div className="flex-1 overflow-y-auto min-h-0 py-3 divide-y divide-neutral-100 max-h-[40vh] no-scrollbar pr-0.5">
+          <div className={`flex-1 overflow-y-auto min-h-0 py-3 divide-y divide-neutral-100 max-h-[40vh] no-scrollbar pr-0.5 ${cartItems.length === 0 ? 'flex flex-col justify-center' : ''}`}>
             {cartItems.length > 0 ? (
               cartItems.map((cartItem) => (
                 <div key={cartItem.id} className="py-3 flex flex-col gap-1.5">
@@ -461,10 +579,15 @@ export default function HomePage() {
                       {cartItem.selectedModifiers.length > 0 && (
                         <div className="text-[9px] text-neutral-400 mt-1 space-y-0.5">
                           {cartItem.selectedModifiers.map((mod) => (
-                            <p key={mod.optionId} className="flex items-center gap-1 pl-1">
+                            <p
+                              key={mod.optionId}
+                              className="flex items-center gap-1 pl-1"
+                            >
                               <span className="text-brand-primary">•</span>
                               <span>{mod.optionName}</span>
-                              {mod.price > 0 && <span>(+${mod.price.toFixed(2)})</span>}
+                              {mod.price > 0 && (
+                                <span>(+${mod.price.toFixed(2)})</span>
+                              )}
                             </p>
                           ))}
                         </div>
@@ -511,9 +634,11 @@ export default function HomePage() {
               ))
             ) : (
               /* Empty Bag view */
-              <div className="flex flex-col items-center justify-center py-10 text-center">
+              <div className="flex flex-col items-center justify-center py-10 text-center h-full">
                 <span className="text-2xl mb-1.5 opacity-80">🛒</span>
-                <p className="text-xs font-bold text-neutral-600">Your bag is empty</p>
+                <p className="text-xs font-bold text-neutral-600">
+                  Your bag is empty
+                </p>
                 <p className="text-[9.5px] text-neutral-400 max-w-[160px] leading-relaxed mt-1">
                   Add savory items from the menu to start your order.
                 </p>
@@ -528,7 +653,7 @@ export default function HomePage() {
                 <span>Subtotal</span>
                 <span>${subtotal.toFixed(2)}</span>
               </div>
-              {orderType === 'delivery' && (
+              {orderType === "delivery" && (
                 <div className="flex justify-between text-[11px] text-neutral-500 font-semibold">
                   <span>Delivery Fee</span>
                   <span>${deliveryFee.toFixed(2)}</span>
@@ -540,12 +665,14 @@ export default function HomePage() {
               </div>
               <div className="flex justify-between text-xs font-black text-neutral-800 border-t border-neutral-100 pt-2 flex-shrink-0">
                 <span>Total Amount</span>
-                <span className="text-sm text-brand-primary">${total.toFixed(2)}</span>
+                <span className="text-sm text-brand-primary">
+                  ${total.toFixed(2)}
+                </span>
               </div>
 
               {/* Simulated submit trigger */}
               <button
-                onClick={() => toast.success('Online checkout coming soon!')}
+                onClick={() => setShowCheckoutModal(true)}
                 className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white py-2.5 rounded-xl text-xs font-bold shadow-md shadow-brand-primary/10 transition-all active:scale-[0.98] mt-3.5 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>Proceed to Checkout</span>
@@ -578,7 +705,7 @@ export default function HomePage() {
             </div>
 
             {/* Cart Items Scroll */}
-            <div className="flex-1 overflow-y-auto py-3 divide-y divide-neutral-100 no-scrollbar">
+            <div className={`flex-1 overflow-y-auto py-3 divide-y divide-neutral-100 no-scrollbar ${cartItems.length === 0 ? 'flex flex-col justify-center' : ''}`}>
               {cartItems.length > 0 ? (
                 cartItems.map((cartItem) => (
                   <div key={cartItem.id} className="py-3 flex flex-col gap-1.5">
@@ -590,10 +717,15 @@ export default function HomePage() {
                         {cartItem.selectedModifiers.length > 0 && (
                           <div className="text-[9px] text-neutral-400 mt-1 space-y-0.5">
                             {cartItem.selectedModifiers.map((mod) => (
-                              <p key={mod.optionId} className="flex items-center gap-1 pl-1">
+                              <p
+                                key={mod.optionId}
+                                className="flex items-center gap-1 pl-1"
+                              >
                                 <span className="text-brand-primary">•</span>
                                 <span>{mod.optionName}</span>
-                                {mod.price > 0 && <span>(+${mod.price.toFixed(2)})</span>}
+                                {mod.price > 0 && (
+                                  <span>(+${mod.price.toFixed(2)})</span>
+                                )}
                               </p>
                             ))}
                           </div>
@@ -638,11 +770,14 @@ export default function HomePage() {
                   </div>
                 ))
               ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="flex flex-col items-center justify-center py-20 text-center h-full">
                   <span className="text-3xl mb-2 opacity-80">🛒</span>
-                  <p className="text-xs font-bold text-neutral-600">Your bag is empty</p>
+                  <p className="text-xs font-bold text-neutral-600">
+                    Your bag is empty
+                  </p>
                   <p className="text-[10px] text-neutral-400 max-w-[200px] leading-relaxed mt-1">
-                    Select mouthwatering meals from the menu list to build your order!
+                    Select mouthwatering meals from the menu list to build your
+                    order!
                   </p>
                 </div>
               )}
@@ -655,7 +790,7 @@ export default function HomePage() {
                   <span>Subtotal</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
-                {orderType === 'delivery' && (
+                {orderType === "delivery" && (
                   <div className="flex justify-between text-[11px] text-neutral-500 font-semibold">
                     <span>Delivery Fee</span>
                     <span>${deliveryFee.toFixed(2)}</span>
@@ -667,9 +802,11 @@ export default function HomePage() {
                 </div>
                 <div className="flex justify-between text-xs font-black text-neutral-800 border-t border-neutral-100 pt-2">
                   <span>Total Amount</span>
-                  <span className="text-sm text-brand-primary">${total.toFixed(2)}</span>
+                  <span className="text-sm text-brand-primary">
+                    ${total.toFixed(2)}
+                  </span>
                 </div>
-                
+
                 <div className="flex gap-2 pt-3">
                   <button
                     onClick={clearCart}
@@ -680,7 +817,7 @@ export default function HomePage() {
                   <button
                     onClick={() => {
                       setIsCartOpen(false);
-                      toast.success('Online checkout coming soon!');
+                      setShowCheckoutModal(true);
                     }}
                     className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-white py-3 rounded-xl text-xs font-bold shadow-md shadow-brand-primary/10 transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                   >
@@ -698,11 +835,14 @@ export default function HomePage() {
       {cartItems.length > 0 && !isCartOpen && (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-neutral-200 shadow-lg z-30 flex items-center justify-between gap-3 animate-fade-in">
           <div>
-            <p className="text-[9px] text-neutral-400 font-extrabold uppercase tracking-wide">My Bag Total</p>
+            <p className="text-[9px] text-neutral-400 font-extrabold uppercase tracking-wide">
+              My Bag Total
+            </p>
             <p className="text-[13px] font-black text-neutral-800">
               ${total.toFixed(2)}&nbsp;
               <span className="text-[10px] text-neutral-400 font-normal">
-                ({cartItems.reduce((acc, curr) => acc + curr.quantity, 0)} item{cartItems.length !== 1 ? 's' : ''})
+                ({cartItems.reduce((acc, curr) => acc + curr.quantity, 0)} item
+                {cartItems.length !== 1 ? "s" : ""})
               </span>
             </p>
           </div>
@@ -740,9 +880,10 @@ export default function HomePage() {
                 <X size={14} />
               </button>
             </div>
-            
+
             <p className="text-[10px] text-neutral-400 font-medium leading-relaxed">
-              Please enter your delivery details below to check availability and calculate delivery fees.
+              Please enter your delivery details below to check availability and
+              calculate delivery fees.
             </p>
 
             <div>
@@ -775,6 +916,32 @@ export default function HomePage() {
         isOpen={activeItem !== null}
         onClose={() => setActiveItem(null)}
       />
+
+      {/* ── CHECKOUT MODAL ── */}
+      <CheckoutModal
+        isOpen={showCheckoutModal}
+        onClose={() => setShowCheckoutModal(false)}
+        cartItems={cartItems}
+        orderType={orderType}
+        setOrderType={setOrderType}
+        address={address}
+        setAddress={setAddress}
+        subtotal={subtotal}
+        tax={tax}
+        deliveryFee={deliveryFee}
+        total={total}
+        onSubmit={handlePlaceOrder}
+      />
+
+      {/* ── ORDER STATUS MODAL ── */}
+      {activeOrder && (
+        <OrderStatusModal
+          isOpen={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+          order={activeOrder}
+          onDismiss={handleDismissActiveOrder}
+        />
+      )}
     </div>
   );
 }
