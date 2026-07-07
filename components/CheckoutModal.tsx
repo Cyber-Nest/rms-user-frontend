@@ -1,17 +1,30 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { X, User, Phone, Mail, MapPin, Clock, CreditCard, ArrowRight, AlertCircle, ShoppingBag, Locate, Truck } from 'lucide-react';
-import { CartItem } from '../types';
-import toast from 'react-hot-toast';
-import axios from 'axios';
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  X,
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  Clock,
+  CreditCard,
+  ArrowRight,
+  AlertCircle,
+  ShoppingBag,
+  Locate,
+  Truck,
+} from "lucide-react";
+import { CartItem } from "../types";
+import toast from "react-hot-toast";
+import axios from "axios";
 
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   cartItems: CartItem[];
-  orderType: 'takeout' | 'delivery';
-  setOrderType: (type: 'takeout' | 'delivery') => void;
+  orderType: "takeout" | "delivery";
+  setOrderType: (type: "takeout" | "delivery") => void;
   address: string;
   setAddress: (address: string) => void;
   subtotal: number;
@@ -22,7 +35,45 @@ interface CheckoutModalProps {
   isSubmitting?: boolean;
 }
 
-export default function CheckoutModal({
+import { loadStripe } from "@stripe/stripe-js";
+import {
+  Elements,
+  CardElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
+
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+    "pk_test_TYooMQauvdEDq54NiTphI7jx",
+);
+
+interface CheckoutModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  cartItems: CartItem[];
+  orderType: "takeout" | "delivery";
+  setOrderType: (type: "takeout" | "delivery") => void;
+  address: string;
+  setAddress: (address: string) => void;
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  total: number;
+  onSubmit: (orderData: any) => void;
+  isSubmitting?: boolean;
+}
+
+export default function CheckoutModal(props: CheckoutModalProps) {
+  if (!props.isOpen) return null;
+  return (
+    <Elements stripe={stripePromise}>
+      <CheckoutModalInner {...props} />
+    </Elements>
+  );
+}
+
+function CheckoutModalInner({
   isOpen,
   onClose,
   cartItems,
@@ -38,25 +89,31 @@ export default function CheckoutModal({
   isSubmitting = false,
 }: CheckoutModalProps) {
   // Customer details
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [addressInput, setAddressInput] = useState(address);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
 
   const getTodayLocalString = () => {
     const d = new Date();
     const tzOffset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - tzOffset).toISOString().split('T')[0];
+    return new Date(d.getTime() - tzOffset).toISOString().split("T")[0];
   };
 
   // Timing states
-  const [timingMode, setTimingMode] = useState<'now' | 'later'>('now');
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayLocalString());
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState('');
+  const [timingMode, setTimingMode] = useState<"now" | "later">("now");
+  const [selectedDate, setSelectedDate] = useState<string>(
+    getTodayLocalString(),
+  );
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
 
   // Payment states
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "card" | "stripe"
+  >("stripe");
+  const [isCardComplete, setIsCardComplete] = useState(false);
+  const [isCardFocused, setIsCardFocused] = useState(false);
 
   // GPS locating state
   const [isLocating, setIsLocating] = useState(false);
@@ -64,20 +121,33 @@ export default function CheckoutModal({
   // Form validity validator
   const isFormInvalid = useMemo(() => {
     if (!name.trim()) return true;
-    if (!phone.trim() || phone.trim().replace(/\D/g, '').length < 10) return true;
-    if (orderType === 'delivery' && !addressInput.trim()) return true;
-    if (timingMode === 'later' && (!selectedDate || !selectedTimeSlot)) return true;
+    if (!phone.trim() || phone.trim().replace(/\D/g, "").length < 10)
+      return true;
+    if (orderType === "delivery" && !addressInput.trim()) return true;
+    if (timingMode === "later" && (!selectedDate || !selectedTimeSlot))
+      return true;
+    if (paymentMethod === "stripe" && !isCardComplete) return true;
     return false;
-  }, [name, phone, orderType, addressInput, timingMode, selectedDate, selectedTimeSlot]);
+  }, [
+    name,
+    phone,
+    orderType,
+    addressInput,
+    timingMode,
+    selectedDate,
+    selectedTimeSlot,
+    paymentMethod,
+    isCardComplete,
+  ]);
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by your browser');
+      toast.error("Geolocation is not supported by your browser");
       return;
     }
 
     setIsLocating(true);
-    toast.loading('Fetching your location...', { id: 'locating' });
+    toast.loading("Fetching your location...", { id: "locating" });
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -88,41 +158,44 @@ export default function CheckoutModal({
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
             {
               headers: {
-                'Accept-Language': 'en-US,en;q=0.9',
+                "Accept-Language": "en-US,en;q=0.9",
               },
-            }
+            },
           );
-          
+
           if (response.data && response.data.display_name) {
             const fullAddress = response.data.display_name;
             setAddressInput(fullAddress);
-            toast.success('Location updated!', { id: 'locating' });
+            toast.success("Location updated!", { id: "locating" });
           } else {
             setAddressInput(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
-            toast.success('Coordinates captured!', { id: 'locating' });
+            toast.success("Coordinates captured!", { id: "locating" });
           }
         } catch (error) {
-          console.error('Error reverse geocoding location:', error);
+          console.error("Error reverse geocoding location:", error);
           setAddressInput(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
-          toast.success('Coordinates captured (Reverse geocoding failed)!', { id: 'locating' });
+          toast.success("Coordinates captured (Reverse geocoding failed)!", {
+            id: "locating",
+          });
         } finally {
           setIsLocating(false);
         }
       },
       (error) => {
-        console.error('Error getting geolocation:', error);
-        let errorMsg = 'Failed to get your location';
+        console.error("Error getting geolocation:", error);
+        let errorMsg = "Failed to get your location";
         if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'Location permission denied. Please allow location access in your browser settings.';
+          errorMsg =
+            "Location permission denied. Please allow location access in your browser settings.";
         } else if (error.code === error.POSITION_UNAVAILABLE) {
-          errorMsg = 'Location position unavailable.';
+          errorMsg = "Location position unavailable.";
         } else if (error.code === error.TIMEOUT) {
-          errorMsg = 'Location request timed out.';
+          errorMsg = "Location request timed out.";
         }
-        toast.error(errorMsg, { id: 'locating' });
+        toast.error(errorMsg, { id: "locating" });
         setIsLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   };
 
@@ -134,12 +207,12 @@ export default function CheckoutModal({
   // Lock background scroll when open
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
     }
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
     };
   }, [isOpen]);
 
@@ -147,12 +220,12 @@ export default function CheckoutModal({
   const timeSlots = useMemo(() => {
     const slots: string[] = [];
     const todayStr = getTodayLocalString();
-    
+
     let startTime = new Date();
     if (selectedDate === todayStr) {
       // Start generating slots 30 minutes from now
       startTime = new Date(startTime.getTime() + 30 * 60 * 1000);
-      
+
       // Round minutes up to the next 15-minute boundary (e.g. :00, :15, :30, :45)
       const minutes = startTime.getMinutes();
       const roundedMinutes = Math.ceil(minutes / 15) * 15;
@@ -172,24 +245,25 @@ export default function CheckoutModal({
       // Future date: slots start at 11:00 AM sharp
       startTime.setHours(11, 0, 0, 0);
     }
-    
+
     const endTime = new Date();
     endTime.setHours(22, 0, 0, 0); // 10:00 PM close
 
     while (startTime < endTime) {
       const hours = startTime.getHours();
       const currentMins = startTime.getMinutes();
-      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const ampm = hours >= 12 ? "PM" : "AM";
       const formattedHours = hours % 12 === 0 ? 12 : hours % 12;
-      const formattedMinutes = currentMins < 10 ? `0${currentMins}` : currentMins;
-      
+      const formattedMinutes =
+        currentMins < 10 ? `0${currentMins}` : currentMins;
+
       const timeStr = `${formattedHours}:${formattedMinutes} ${ampm}`;
       slots.push(timeStr);
-      
+
       // Add 15 minutes
       startTime.setMinutes(startTime.getMinutes() + 15);
     }
-    
+
     return slots;
   }, [selectedDate]);
 
@@ -200,29 +274,33 @@ export default function CheckoutModal({
     }
   }, [timeSlots, selectedTimeSlot]);
 
-  if (!isOpen) return null;
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isStripeProcessing, setIsStripeProcessing] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name.trim()) return toast.error('Please enter your name');
-    if (!phone.trim() || phone.length < 10) return toast.error('Please enter a valid phone number');
-    if (orderType === 'delivery' && !addressInput.trim()) return toast.error('Please enter a delivery address');
+    if (!name.trim()) return toast.error("Please enter your name");
+    if (!phone.trim() || phone.length < 10)
+      return toast.error("Please enter a valid phone number");
+    if (orderType === "delivery" && !addressInput.trim())
+      return toast.error("Please enter a delivery address");
 
     // Parse scheduled date if timingMode is 'later'
     let scheduledAt: Date | null = null;
     let dueAt: Date | null = null;
 
-    if (timingMode === 'later' && selectedTimeSlot) {
-      const [time, modifier] = selectedTimeSlot.split(' ');
-      let [hoursStr, minutesStr] = time.split(':');
+    if (timingMode === "later" && selectedTimeSlot) {
+      const [time, modifier] = selectedTimeSlot.split(" ");
+      let [hoursStr, minutesStr] = time.split(":");
       let hours = parseInt(hoursStr, 10);
       const minutes = parseInt(minutesStr, 10);
-      
-      if (modifier === 'PM' && hours < 12) hours += 12;
-      if (modifier === 'AM' && hours === 12) hours = 0;
 
-      const targetDate = new Date(selectedDate + 'T00:00:00');
+      if (modifier === "PM" && hours < 12) hours += 12;
+      if (modifier === "AM" && hours === 12) hours = 0;
+
+      const targetDate = new Date(selectedDate + "T00:00:00");
       targetDate.setHours(hours, minutes, 0, 0);
       scheduledAt = targetDate;
       dueAt = targetDate;
@@ -234,33 +312,105 @@ export default function CheckoutModal({
       dueAt = targetDate;
     }
 
+    let paymentIntentId = "";
+    let paymentStatus = "unpaid";
+
+    if (paymentMethod === "stripe") {
+      if (!stripe || !elements) {
+        return toast.error("Stripe has not loaded yet. Please try again.");
+      }
+
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) return;
+
+      setIsStripeProcessing(true);
+      const toastId = toast.loading("Initiating secure card payment...");
+
+      try {
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
+        // 1. Create PaymentIntent on the backend
+        const response = await axios.post(
+          `${apiUrl}/payments/create-payment-intent`,
+          {
+            amount: total,
+          },
+        );
+
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || "Failed to initialize transaction",
+          );
+        }
+
+        const { clientSecret, paymentIntentId: piId } = response.data;
+        paymentIntentId = piId;
+
+        toast.loading("Confirming card payment details...", { id: toastId });
+
+        // 2. Confirm card payment with Stripe
+        const result = await stripe.confirmCardPayment(clientSecret, {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              name: name,
+              phone: phone,
+              email: email || undefined,
+            },
+          },
+        });
+
+        if (result.error) {
+          throw new Error(
+            result.error.message || "Payment authorization failed",
+          );
+        }
+
+        if (result.paymentIntent?.status === "succeeded") {
+          paymentStatus = "paid";
+          toast.success("Payment verified successfully!", { id: toastId });
+        } else {
+          throw new Error("Payment was not completed successfully.");
+        }
+      } catch (error: any) {
+        toast.error(error.message || "Stripe payment failed.", { id: toastId });
+        setIsStripeProcessing(false);
+        return;
+      } finally {
+        setIsStripeProcessing(false);
+      }
+    }
+
     // Save address back to context if it was updated
-    if (orderType === 'delivery' && addressInput !== address) {
+    if (orderType === "delivery" && addressInput !== address) {
       setAddress(addressInput);
     }
 
     // Construct the Mongoose Order Payload
     const orderPayload = {
       orderType: orderType, // backend will need this, e.g. "takeout" or "delivery"
-      orderSource: 'online',
-      items: cartItems.map(item => ({
+      orderSource: "online",
+      items: cartItems.map((item) => ({
         menuItemId: item.menuItemId,
         name: item.name,
-        image: item.image || '',
+        image: item.image || "",
         basePrice: item.basePrice,
         selectedModifiers: item.selectedModifiers,
         quantity: item.quantity,
         totalPrice: item.totalPrice,
-        note: item.note || '',
+        note: item.note || "",
       })),
       subtotal: subtotal,
       tax: tax,
       taxRate: 0.05,
-      deliveryFee: orderType === 'delivery' ? deliveryFee : 0,
+      deliveryFee: orderType === "delivery" ? deliveryFee : 0,
       total: total,
-      paymentTiming: 'pay-later', // Cash/Card on Delivery/Pickup
-      paymentType: 'one-time',
-      paymentStatus: 'unpaid',
+      paymentTiming: paymentMethod === "stripe" ? "pay-now" : "pay-later", // Stripe is paid immediately
+      paymentType: "one-time",
+      paymentStatus: paymentStatus,
+      paymentMethod: paymentMethod, // stripe, cash, or card (terminal)
+      paymentIntentId: paymentIntentId || undefined,
       payments: [],
       orderTiming: timingMode,
       scheduledAt: scheduledAt,
@@ -268,11 +418,11 @@ export default function CheckoutModal({
       customer: {
         name: name,
         phone: phone,
-        email: email || '',
-        address: orderType === 'delivery' ? addressInput : '',
+        email: email || "",
+        address: orderType === "delivery" ? addressInput : "",
       },
       notes: notes,
-      status: 'pending',
+      status: "pending",
     };
 
     onSubmit(orderPayload);
@@ -281,11 +431,13 @@ export default function CheckoutModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:justify-end select-none">
       {/* Backdrop */}
-      <div onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" />
+      <div
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
+      />
 
       {/* Slide-over Container */}
       <div className="relative w-full md:max-w-[34rem] h-[92vh] md:h-full bg-white rounded-t-3xl md:rounded-t-none md:rounded-l-2xl overflow-hidden shadow-2xl flex flex-col z-10 animate-slide-up-mobile md:animate-drawer-slide-in">
-        
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -293,8 +445,12 @@ export default function CheckoutModal({
               <ShoppingBag size={15} className="text-brand-primary" />
             </div>
             <div>
-              <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest leading-none">Checkout</p>
-              <h3 className="text-xs font-black text-neutral-900 leading-tight mt-1">Complete Your Order</h3>
+              <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest leading-none">
+                Checkout
+              </p>
+              <h3 className="text-xs font-black text-neutral-900 leading-tight mt-1">
+                Complete Your Order
+              </h3>
             </div>
           </div>
           <button
@@ -306,34 +462,52 @@ export default function CheckoutModal({
         </div>
 
         {/* Scrollable Form Area */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0 no-scrollbar pb-24">
-          
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0 no-scrollbar pb-24"
+        >
           {/* Order Mode Toggle */}
           <div className="space-y-2">
-            <label className="block text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Order Option</label>
+            <label className="block text-[9px] font-bold text-neutral-400 uppercase tracking-wider">
+              Order Option
+            </label>
             <div className="grid grid-cols-2 gap-2 bg-neutral-100 p-1 rounded-xl border border-neutral-200/50">
               <button
                 type="button"
-                onClick={() => setOrderType('takeout')}
+                onClick={() => setOrderType("takeout")}
                 className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  orderType === 'takeout'
-                    ? 'bg-white text-neutral-800 shadow-sm border border-neutral-200/20'
-                    : 'text-neutral-500 hover:text-neutral-800'
+                  orderType === "takeout"
+                    ? "bg-white text-neutral-800 shadow-sm border border-neutral-200/20"
+                    : "text-neutral-500 hover:text-neutral-800"
                 }`}
               >
-                <ShoppingBag size={13} className={orderType === 'takeout' ? 'text-brand-primary' : 'text-neutral-400'} />
+                <ShoppingBag
+                  size={13}
+                  className={
+                    orderType === "takeout"
+                      ? "text-brand-primary"
+                      : "text-neutral-400"
+                  }
+                />
                 <span>Takeout</span>
               </button>
               <button
                 type="button"
-                onClick={() => setOrderType('delivery')}
+                onClick={() => setOrderType("delivery")}
                 className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  orderType === 'delivery'
-                    ? 'bg-white text-neutral-800 shadow-sm border border-neutral-200/20'
-                    : 'text-neutral-500 hover:text-neutral-800'
+                  orderType === "delivery"
+                    ? "bg-white text-neutral-800 shadow-sm border border-neutral-200/20"
+                    : "text-neutral-500 hover:text-neutral-800"
                 }`}
               >
-                <Truck size={13} className={orderType === 'delivery' ? 'text-brand-primary' : 'text-neutral-400'} />
+                <Truck
+                  size={13}
+                  className={
+                    orderType === "delivery"
+                      ? "text-brand-primary"
+                      : "text-neutral-400"
+                  }
+                />
                 <span>Delivery</span>
               </button>
             </div>
@@ -344,13 +518,18 @@ export default function CheckoutModal({
             <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100 pb-1">
               Contact Information
             </h4>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Name */}
               <div className="space-y-1">
-                <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">Full Name *</label>
+                <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">
+                  Full Name *
+                </label>
                 <div className="relative">
-                  <User size={13} className="absolute left-3 top-3 text-neutral-400" />
+                  <User
+                    size={13}
+                    className="absolute left-3 top-3 text-neutral-400"
+                  />
                   <input
                     type="text"
                     required
@@ -364,9 +543,14 @@ export default function CheckoutModal({
 
               {/* Phone */}
               <div className="space-y-1">
-                <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">Phone Number *</label>
+                <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">
+                  Phone Number *
+                </label>
                 <div className="relative">
-                  <Phone size={13} className="absolute left-3 top-3 text-neutral-400" />
+                  <Phone
+                    size={13}
+                    className="absolute left-3 top-3 text-neutral-400"
+                  />
                   <input
                     type="tel"
                     required
@@ -381,9 +565,14 @@ export default function CheckoutModal({
 
             {/* Email (Optional) */}
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">Email (Optional)</label>
+              <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">
+                Email (Optional)
+              </label>
               <div className="relative">
-                <Mail size={13} className="absolute left-3 top-3 text-neutral-400" />
+                <Mail
+                  size={13}
+                  className="absolute left-3 top-3 text-neutral-400"
+                />
                 <input
                   type="email"
                   value={email}
@@ -396,15 +585,20 @@ export default function CheckoutModal({
           </div>
 
           {/* Delivery Address (Conditional) */}
-          {orderType === 'delivery' && (
+          {orderType === "delivery" && (
             <div className="space-y-3 animate-fade-in">
               <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100 pb-1">
                 Delivery Destination
               </h4>
               <div className="space-y-1">
-                <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">Delivery Address *</label>
+                <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">
+                  Delivery Address *
+                </label>
                 <div className="relative flex items-center">
-                  <MapPin size={13} className="absolute left-3 text-brand-primary" />
+                  <MapPin
+                    size={13}
+                    className="absolute left-3 text-brand-primary"
+                  />
                   <input
                     type="text"
                     required
@@ -420,7 +614,12 @@ export default function CheckoutModal({
                     title="Use GPS current location"
                     className="absolute right-3 p-1.5 text-neutral-400 hover:text-brand-primary disabled:text-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
                   >
-                    <Locate size={14} className={isLocating ? 'animate-spin text-brand-primary' : ''} />
+                    <Locate
+                      size={14}
+                      className={
+                        isLocating ? "animate-spin text-brand-primary" : ""
+                      }
+                    />
                   </button>
                 </div>
               </div>
@@ -432,52 +631,76 @@ export default function CheckoutModal({
             <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100 pb-1">
               Timing Preferences
             </h4>
-            
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setTimingMode('now')}
+                onClick={() => setTimingMode("now")}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                  timingMode === 'now'
-                    ? 'border-brand-primary bg-orange-50/20 ring-1 ring-brand-primary'
-                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                  timingMode === "now"
+                    ? "border-brand-primary bg-orange-50/20 ring-1 ring-brand-primary"
+                    : "border-neutral-200 bg-white hover:bg-neutral-50"
                 }`}
               >
-                <Clock size={15} className={timingMode === 'now' ? 'text-brand-primary' : 'text-neutral-400'} />
-                <span className="text-[10.5px] font-bold mt-1 text-neutral-800">ASAP</span>
+                <Clock
+                  size={15}
+                  className={
+                    timingMode === "now"
+                      ? "text-brand-primary"
+                      : "text-neutral-400"
+                  }
+                />
+                <span className="text-[10.5px] font-bold mt-1 text-neutral-800">
+                  ASAP
+                </span>
                 <span className="text-[8.5px] text-neutral-400 mt-0.5">
-                  {orderType === 'delivery' ? 'Prep + 1h Delivery' : 'Ready in 40-45m'}
+                  {orderType === "delivery"
+                    ? "Prep + 1h Delivery"
+                    : "Ready in 40-45m"}
                 </span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setTimingMode('later')}
+                onClick={() => setTimingMode("later")}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                  timingMode === 'later'
-                    ? 'border-brand-primary bg-orange-50/20 ring-1 ring-brand-primary'
-                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                  timingMode === "later"
+                    ? "border-brand-primary bg-orange-50/20 ring-1 ring-brand-primary"
+                    : "border-neutral-200 bg-white hover:bg-neutral-50"
                 }`}
               >
-                <Clock size={15} className={timingMode === 'later' ? 'text-brand-primary' : 'text-neutral-400'} />
-                <span className="text-[10.5px] font-bold mt-1 text-neutral-800">Schedule Later</span>
-                <span className="text-[8.5px] text-neutral-400 mt-0.5">Select time slot</span>
+                <Clock
+                  size={15}
+                  className={
+                    timingMode === "later"
+                      ? "text-brand-primary"
+                      : "text-neutral-400"
+                  }
+                />
+                <span className="text-[10.5px] font-bold mt-1 text-neutral-800">
+                  Schedule Later
+                </span>
+                <span className="text-[8.5px] text-neutral-400 mt-0.5">
+                  Select time slot
+                </span>
               </button>
             </div>
 
             {/* Date & Time selection if scheduling for later */}
-            {timingMode === 'later' && (
+            {timingMode === "later" && (
               <div className="space-y-3 animate-scale-up">
                 {/* Date Picker */}
                 <div className="space-y-1.5">
-                  <label className="block text-[9px] font-bold text-neutral-550 uppercase tracking-wide">Select Date *</label>
+                  <label className="block text-[9px] font-bold text-neutral-550 uppercase tracking-wide">
+                    Select Date *
+                  </label>
                   <input
                     type="date"
                     min={getTodayLocalString()}
                     value={selectedDate}
                     onChange={(e) => {
                       setSelectedDate(e.target.value);
-                      setSelectedTimeSlot('');
+                      setSelectedTimeSlot("");
                     }}
                     className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-xs text-neutral-700 font-bold focus:outline-none focus:border-brand-primary cursor-pointer"
                   />
@@ -485,14 +708,18 @@ export default function CheckoutModal({
 
                 {/* Time slot dropdown */}
                 <div className="space-y-1.5">
-                  <label className="block text-[9px] font-bold text-neutral-550 uppercase tracking-wide">Select Time Slot *</label>
+                  <label className="block text-[9px] font-bold text-neutral-550 uppercase tracking-wide">
+                    Select Time Slot *
+                  </label>
                   {timeSlots.length > 0 ? (
                     <select
                       value={selectedTimeSlot}
                       onChange={(e) => setSelectedTimeSlot(e.target.value)}
                       className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-xs text-neutral-700 font-bold focus:outline-none focus:border-brand-primary cursor-pointer"
                     >
-                      <option value="" disabled hidden>-- Select time --</option>
+                      <option value="" disabled hidden>
+                        -- Select time --
+                      </option>
                       {timeSlots.map((slot) => (
                         <option key={slot} value={slot}>
                           {slot}
@@ -510,60 +737,57 @@ export default function CheckoutModal({
             )}
           </div>
 
-          {/* Payment Method */}
-          <div className="space-y-3">
-            <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-100 pb-1">
-              Payment Option
-            </h4>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('cash')}
-                className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  paymentMethod === 'cash'
-                    ? 'border-brand-primary bg-orange-50/20 ring-1 ring-brand-primary'
-                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
-                }`}
-              >
-                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${paymentMethod === 'cash' ? 'bg-brand-primary border-brand-primary' : 'border-neutral-300'}`}>
-                  {paymentMethod === 'cash' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-neutral-800">Cash</p>
-                  <p className="text-[8px] text-neutral-400">Pay on delivery/pickup</p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('card')}
-                className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  paymentMethod === 'card'
-                    ? 'border-brand-primary bg-orange-50/20 ring-1 ring-brand-primary'
-                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
-                }`}
-              >
-                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${paymentMethod === 'card' ? 'bg-brand-primary border-brand-primary' : 'border-neutral-300'}`}>
-                  {paymentMethod === 'card' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-neutral-800">Card Terminal</p>
-                  <p className="text-[8px] text-neutral-400">Tap card at counter/door</p>
-                </div>
-              </button>
+          {/* Stripe Card Element Input */}
+          <div className="space-y-2 animate-scale-up p-4 bg-neutral-50 border border-neutral-200/60 rounded-2xl">
+            <label className="block text-[9px] font-bold text-neutral-555 uppercase tracking-wide">
+              Credit or Debit Card Details *
+            </label>
+            <div
+              className={`bg-white border rounded-xl px-3.5 py-3.5 shadow-3xs transition-all duration-200 ${
+                isCardFocused
+                  ? "border-brand-primary ring-2 ring-brand-primary/10"
+                  : "border-neutral-200 hover:border-neutral-300"
+              }`}
+            >
+              <CardElement
+                onFocus={() => setIsCardFocused(true)}
+                onBlur={() => setIsCardFocused(false)}
+                onChange={(e) => setIsCardComplete(e.complete)}
+                options={{
+                  hidePostalCode: true,
+                  style: {
+                    base: {
+                      fontSize: "13.5px",
+                      color: "#262626",
+                      fontFamily: "system-ui, -apple-system, sans-serif",
+                      "::placeholder": {
+                        color: "#a3a3a3",
+                      },
+                    },
+                    invalid: {
+                      color: "#dc2626",
+                    },
+                  },
+                }}
+              />
             </div>
           </div>
 
           {/* Notes */}
           <div className="space-y-1.5">
             <label className="block text-[9px] font-bold text-neutral-400 uppercase tracking-wider">
-              {orderType === 'delivery' ? 'Delivery Instructions (Optional)' : 'Special Prep Notes (Optional)'}
+              {orderType === "delivery"
+                ? "Delivery Instructions (Optional)"
+                : "Special Prep Notes (Optional)"}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={orderType === 'delivery' ? 'E.g., Leave at the door, call when arrived...' : 'E.g., Extra napkins, plastic utensils...'}
+              placeholder={
+                orderType === "delivery"
+                  ? "E.g., Leave at the door, call when arrived..."
+                  : "E.g., Extra napkins, plastic utensils..."
+              }
               rows={2}
               className="w-full bg-white border border-neutral-200 rounded-xl p-2 text-xs text-neutral-700 placeholder-neutral-400 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary resize-none"
             />
@@ -575,7 +799,7 @@ export default function CheckoutModal({
               <span>Subtotal</span>
               <span>${subtotal.toFixed(2)}</span>
             </div>
-            {orderType === 'delivery' && (
+            {orderType === "delivery" && (
               <div className="flex justify-between text-[10px] text-neutral-500 font-semibold">
                 <span>Delivery Fee</span>
                 <span>${deliveryFee.toFixed(2)}</span>
@@ -587,45 +811,71 @@ export default function CheckoutModal({
             </div>
             <div className="flex justify-between text-xs font-black text-neutral-800 border-t border-neutral-200/70 pt-2">
               <span>Total Amount</span>
-              <span className="text-sm text-brand-primary">${total.toFixed(2)}</span>
+              <span className="text-sm text-brand-primary">
+                ${total.toFixed(2)}
+              </span>
             </div>
           </div>
-
         </form>
 
         {/* Footer Fixed Placed Order Action */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-neutral-100 bg-white flex items-center justify-between gap-4 z-20">
           <div className="min-w-0">
-            <p className="text-[8px] text-neutral-400 font-extrabold uppercase tracking-wide">Total Order Price</p>
-            <p className="text-[14px] font-black text-neutral-800">${total.toFixed(2)}</p>
+            <p className="text-[8px] text-neutral-400 font-extrabold uppercase tracking-wide">
+              Total Order Price
+            </p>
+            <p className="text-[14px] font-black text-neutral-800">
+              ${total.toFixed(2)}
+            </p>
           </div>
 
           <button
             onClick={handleSubmit}
-            disabled={isFormInvalid || isSubmitting}
+            disabled={isFormInvalid || isSubmitting || isStripeProcessing}
             className={`flex-1 py-3.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-              isFormInvalid || isSubmitting
-                ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed shadow-none'
-                : 'bg-brand-primary hover:bg-brand-primary-hover text-white shadow-lg shadow-brand-primary/10 active:scale-[0.98] cursor-pointer'
+              isFormInvalid || isSubmitting || isStripeProcessing
+                ? "bg-neutral-200 text-neutral-400 cursor-not-allowed shadow-none"
+                : "bg-brand-primary hover:bg-brand-primary-hover text-white shadow-lg shadow-brand-primary/10 active:scale-[0.98] cursor-pointer"
             }`}
           >
-            {isSubmitting ? (
+            {isSubmitting || isStripeProcessing ? (
               <>
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
-                <span>Placing Order...</span>
+                <span>
+                  {isStripeProcessing
+                    ? "Processing Payment..."
+                    : "Placing Order..."}
+                </span>
               </>
             ) : (
               <>
-                <span>Place {orderType === 'delivery' ? 'Delivery' : 'Pickup'} Order</span>
+                <span>
+                  Place {orderType === "delivery" ? "Delivery" : "Pickup"} Order
+                </span>
                 <ArrowRight size={13} strokeWidth={2.5} />
               </>
             )}
           </button>
         </div>
-
       </div>
     </div>
   );
