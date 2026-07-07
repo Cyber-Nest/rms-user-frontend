@@ -19,6 +19,7 @@ interface CheckoutModalProps {
   deliveryFee: number;
   total: number;
   onSubmit: (orderData: any) => void;
+  isSubmitting?: boolean;
 }
 
 export default function CheckoutModal({
@@ -34,6 +35,7 @@ export default function CheckoutModal({
   deliveryFee,
   total,
   onSubmit,
+  isSubmitting = false,
 }: CheckoutModalProps) {
   // Customer details
   const [name, setName] = useState('');
@@ -42,8 +44,15 @@ export default function CheckoutModal({
   const [addressInput, setAddressInput] = useState(address);
   const [notes, setNotes] = useState('');
 
+  const getTodayLocalString = () => {
+    const d = new Date();
+    const tzOffset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffset).toISOString().split('T')[0];
+  };
+
   // Timing states
   const [timingMode, setTimingMode] = useState<'now' | 'later'>('now');
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayLocalString());
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('');
 
   // Payment states
@@ -57,9 +66,9 @@ export default function CheckoutModal({
     if (!name.trim()) return true;
     if (!phone.trim() || phone.trim().replace(/\D/g, '').length < 10) return true;
     if (orderType === 'delivery' && !addressInput.trim()) return true;
-    if (timingMode === 'later' && !selectedTimeSlot) return true;
+    if (timingMode === 'later' && (!selectedDate || !selectedTimeSlot)) return true;
     return false;
-  }, [name, phone, orderType, addressInput, timingMode, selectedTimeSlot]);
+  }, [name, phone, orderType, addressInput, timingMode, selectedDate, selectedTimeSlot]);
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
@@ -134,27 +143,33 @@ export default function CheckoutModal({
     };
   }, [isOpen]);
 
-  // Generate 15-minute time slots between 11:00 AM and 10:00 PM for the current day
+  // Generate 15-minute time slots between 11:00 AM and 10:00 PM based on selected date
   const timeSlots = useMemo(() => {
     const slots: string[] = [];
-    const now = new Date();
+    const todayStr = getTodayLocalString();
     
-    // Start generating slots 30 minutes from now
-    const startTime = new Date(now.getTime() + 30 * 60 * 1000);
-    
-    // Round minutes up to the next 15-minute boundary (e.g. :00, :15, :30, :45)
-    const minutes = startTime.getMinutes();
-    const roundedMinutes = Math.ceil(minutes / 15) * 15;
-    if (roundedMinutes === 60) {
-      startTime.setHours(startTime.getHours() + 1);
-      startTime.setMinutes(0);
-    } else {
-      startTime.setMinutes(roundedMinutes);
-    }
-    startTime.setSeconds(0, 0);
+    let startTime = new Date();
+    if (selectedDate === todayStr) {
+      // Start generating slots 30 minutes from now
+      startTime = new Date(startTime.getTime() + 30 * 60 * 1000);
+      
+      // Round minutes up to the next 15-minute boundary (e.g. :00, :15, :30, :45)
+      const minutes = startTime.getMinutes();
+      const roundedMinutes = Math.ceil(minutes / 15) * 15;
+      if (roundedMinutes === 60) {
+        startTime.setHours(startTime.getHours() + 1);
+        startTime.setMinutes(0);
+      } else {
+        startTime.setMinutes(roundedMinutes);
+      }
+      startTime.setSeconds(0, 0);
 
-    // Clamp start hour to operational hours
-    if (startTime.getHours() < 11) {
+      // Clamp start hour to operational hours
+      if (startTime.getHours() < 11) {
+        startTime.setHours(11, 0, 0, 0);
+      }
+    } else {
+      // Future date: slots start at 11:00 AM sharp
       startTime.setHours(11, 0, 0, 0);
     }
     
@@ -176,7 +191,7 @@ export default function CheckoutModal({
     }
     
     return slots;
-  }, [isOpen]);
+  }, [selectedDate]);
 
   // Select first slot by default when timeSlots change
   useEffect(() => {
@@ -207,7 +222,7 @@ export default function CheckoutModal({
       if (modifier === 'PM' && hours < 12) hours += 12;
       if (modifier === 'AM' && hours === 12) hours = 0;
 
-      const targetDate = new Date();
+      const targetDate = new Date(selectedDate + 'T00:00:00');
       targetDate.setHours(hours, minutes, 0, 0);
       scheduledAt = targetDate;
       dueAt = targetDate;
@@ -243,15 +258,10 @@ export default function CheckoutModal({
       taxRate: 0.05,
       deliveryFee: orderType === 'delivery' ? deliveryFee : 0,
       total: total,
-      paymentTiming: 'pay-now', // Default to pay-now since online checkout
+      paymentTiming: 'pay-later', // Cash/Card on Delivery/Pickup
       paymentType: 'one-time',
-      paymentStatus: 'unpaid', // Initial online order starts as unpaid or paid depending on payment system
-      payments: [
-        {
-          method: paymentMethod,
-          amount: total,
-        }
-      ],
+      paymentStatus: 'unpaid',
+      payments: [],
       orderTiming: timingMode,
       scheduledAt: scheduledAt,
       dueAt: dueAt,
@@ -436,7 +446,7 @@ export default function CheckoutModal({
                 <Clock size={15} className={timingMode === 'now' ? 'text-brand-primary' : 'text-neutral-400'} />
                 <span className="text-[10.5px] font-bold mt-1 text-neutral-800">ASAP</span>
                 <span className="text-[8.5px] text-neutral-400 mt-0.5">
-                  {orderType === 'delivery' ? 'Prep + 1h Delivery' : 'Ready in 15-20m'}
+                  {orderType === 'delivery' ? 'Prep + 1h Delivery' : 'Ready in 40-45m'}
                 </span>
               </button>
 
@@ -455,28 +465,47 @@ export default function CheckoutModal({
               </button>
             </div>
 
-            {/* Time slot dropdown if scheduling for later */}
+            {/* Date & Time selection if scheduling for later */}
             {timingMode === 'later' && (
-              <div className="space-y-1.5 animate-scale-up">
-                <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">Select Time Slot *</label>
-                {timeSlots.length > 0 ? (
-                  <select
-                    value={selectedTimeSlot}
-                    onChange={(e) => setSelectedTimeSlot(e.target.value)}
-                    className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2 text-xs text-neutral-700 font-bold focus:outline-none focus:border-brand-primary cursor-pointer"
-                  >
-                    {timeSlots.map((slot) => (
-                      <option key={slot} value={slot}>
-                        {slot}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex items-center gap-1.5 p-3 rounded-xl bg-orange-50 border border-orange-100 text-orange-600 text-[10px] font-semibold">
-                    <AlertCircle size={12} />
-                    <span>The kitchen is closed or closing soon. Slots are not available.</span>
-                  </div>
-                )}
+              <div className="space-y-3 animate-scale-up">
+                {/* Date Picker */}
+                <div className="space-y-1.5">
+                  <label className="block text-[9px] font-bold text-neutral-550 uppercase tracking-wide">Select Date *</label>
+                  <input
+                    type="date"
+                    min={getTodayLocalString()}
+                    value={selectedDate}
+                    onChange={(e) => {
+                      setSelectedDate(e.target.value);
+                      setSelectedTimeSlot('');
+                    }}
+                    className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-xs text-neutral-700 font-bold focus:outline-none focus:border-brand-primary cursor-pointer"
+                  />
+                </div>
+
+                {/* Time slot dropdown */}
+                <div className="space-y-1.5">
+                  <label className="block text-[9px] font-bold text-neutral-550 uppercase tracking-wide">Select Time Slot *</label>
+                  {timeSlots.length > 0 ? (
+                    <select
+                      value={selectedTimeSlot}
+                      onChange={(e) => setSelectedTimeSlot(e.target.value)}
+                      className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-xs text-neutral-700 font-bold focus:outline-none focus:border-brand-primary cursor-pointer"
+                    >
+                      <option value="" disabled hidden>-- Select time --</option>
+                      {timeSlots.map((slot) => (
+                        <option key={slot} value={slot}>
+                          {slot}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-1.5 p-3 rounded-xl bg-orange-50 border border-orange-100 text-orange-600 text-[10px] font-semibold">
+                      <AlertCircle size={12} />
+                      <span>No time slots available for this date.</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -573,15 +602,27 @@ export default function CheckoutModal({
 
           <button
             onClick={handleSubmit}
-            disabled={isFormInvalid}
+            disabled={isFormInvalid || isSubmitting}
             className={`flex-1 py-3.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-              isFormInvalid
+              isFormInvalid || isSubmitting
                 ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed shadow-none'
                 : 'bg-brand-primary hover:bg-brand-primary-hover text-white shadow-lg shadow-brand-primary/10 active:scale-[0.98] cursor-pointer'
             }`}
           >
-            <span>Place {orderType === 'delivery' ? 'Delivery' : 'Pickup'} Order</span>
-            <ArrowRight size={13} strokeWidth={2.5} />
+            {isSubmitting ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Placing Order...</span>
+              </>
+            ) : (
+              <>
+                <span>Place {orderType === 'delivery' ? 'Delivery' : 'Pickup'} Order</span>
+                <ArrowRight size={13} strokeWidth={2.5} />
+              </>
+            )}
           </button>
         </div>
 

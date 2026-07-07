@@ -62,6 +62,7 @@ export default function HomePage() {
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [activeOrder, setActiveOrder] = useState<any | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   // Fetch Menu from API (with local fallback)
   useEffect(() => {
@@ -111,6 +112,7 @@ export default function HomePage() {
   }, []);
 
   const handlePlaceOrder = async (orderPayload: any) => {
+    setIsPlacingOrder(true);
     try {
       const apiUrl =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
@@ -148,6 +150,8 @@ export default function HomePage() {
       setShowCheckoutModal(false);
       setShowStatusModal(true);
       toast.success("Order placed successfully (Demo mode)!");
+    } finally {
+      setIsPlacingOrder(false);
     }
   };
 
@@ -931,6 +935,7 @@ export default function HomePage() {
         deliveryFee={deliveryFee}
         total={total}
         onSubmit={handlePlaceOrder}
+        isSubmitting={isPlacingOrder}
       />
 
       {/* ── ORDER STATUS MODAL ── */}

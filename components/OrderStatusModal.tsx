@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle2, Clock, Flame, MapPin, Store, ThumbsUp, XCircle, ChevronRight, Phone } from 'lucide-react';
+import { X, CheckCircle2, Clock, Flame, MapPin, Store, ThumbsUp, XCircle, ChevronRight, Phone, RotateCw } from 'lucide-react';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 interface OrderStatusModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export default function OrderStatusModal({ isOpen, onClose, order, onDismiss }: 
   const [currentStatus, setCurrentStatus] = useState<OrderStatus>('pending');
   const [liveOrder, setLiveOrder] = useState<any>(order);
   const [isSimulated, setIsSimulated] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Sync state with order prop
   useEffect(() => {
@@ -38,64 +40,82 @@ export default function OrderStatusModal({ isOpen, onClose, order, onDismiss }: 
     };
   }, [isOpen]);
 
-  // Poll order status from API or simulate if offline
+  // Fetch status once on mount/open
   useEffect(() => {
-    if (!isOpen || !liveOrder) return;
-
-    let pollInterval: NodeJS.Timeout;
-    let simulateInterval: NodeJS.Timeout;
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-    const orderId = liveOrder._id || liveOrder.id;
-
-    if (orderId && !isSimulated) {
-      // If we have an ID, poll from backend
-      const checkStatus = async () => {
-        try {
-          const res = await axios.get(`${apiUrl}/orders/${orderId}`);
-          if (res.data.success && res.data.data) {
-            setLiveOrder(res.data.data);
-            setCurrentStatus(res.data.data.status);
-          }
-        } catch (err) {
-          console.warn('Could not poll live order status, switching to local simulation', err);
-          setIsSimulated(true);
-        }
-      };
-
-      // Initial check
-      checkStatus();
-      pollInterval = setInterval(checkStatus, 5000); // Poll every 5s
-    } else {
-      // If no ID (local offline fallback) or switched to simulation
-      setIsSimulated(true);
+    if (isOpen && liveOrder) {
+      const orderId = liveOrder._id || liveOrder.id;
+      const isMock = String(orderId).startsWith('mock-');
       
-      const statusCycle: OrderStatus[] = ['pending', 'preparing', 'ready', 'completed'];
-      let currentIdx = statusCycle.indexOf(currentStatus);
-      if (currentIdx === -1) currentIdx = 0;
-
-      simulateInterval = setInterval(() => {
-        if (currentIdx < statusCycle.length - 1) {
-          currentIdx += 1;
-          const nextStatus = statusCycle[currentIdx];
-          setCurrentStatus(nextStatus);
-          
-          // Update local status in liveOrder object
-          setLiveOrder((prev: any) => ({
-            ...prev,
-            status: nextStatus,
-          }));
-        } else {
-          clearInterval(simulateInterval);
-        }
-      }, 15000); // Advance status every 15s in simulation mode
+      if (orderId && !isMock) {
+        const fetchOnce = async () => {
+          try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+            const res = await axios.get(`${apiUrl}/orders/${orderId}`);
+            if (res.data.success && res.data.data) {
+              setLiveOrder(res.data.data);
+              setCurrentStatus(res.data.data.status);
+            }
+          } catch (err) {
+            console.warn('Initial status check failed:', err);
+          }
+        };
+        fetchOnce();
+      } else if (isMock) {
+        setIsSimulated(true);
+      }
     }
+  }, [isOpen]);
 
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      if (simulateInterval) clearInterval(simulateInterval);
-    };
-  }, [isOpen, liveOrder, isSimulated, currentStatus]);
+  // Simulation mode loop (only for demo/mock orders)
+  useEffect(() => {
+    if (!isOpen || !isSimulated) return;
+
+    const statusCycle: OrderStatus[] = ['pending', 'preparing', 'ready', 'completed'];
+    let currentIdx = statusCycle.indexOf(currentStatus);
+    if (currentIdx === -1) currentIdx = 0;
+
+    const simulateInterval = setInterval(() => {
+      if (currentIdx < statusCycle.length - 1) {
+        currentIdx += 1;
+        const nextStatus = statusCycle[currentIdx];
+        setCurrentStatus(nextStatus);
+        
+        // Update local status in liveOrder object
+        setLiveOrder((prev: any) => ({
+          ...prev,
+          status: nextStatus,
+        }));
+      } else {
+        clearInterval(simulateInterval);
+      }
+    }, 15000); // Advance status every 15s in simulation mode
+
+    return () => clearInterval(simulateInterval);
+  }, [isOpen, isSimulated, currentStatus]);
+
+  const handleRefresh = async () => {
+    const orderId = liveOrder?._id || liveOrder?.id;
+    if (!orderId || String(orderId).startsWith('mock-')) return;
+    
+    setIsRefreshing(true);
+    const toastId = toast.loading('Refreshing order status...');
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const res = await axios.get(`${apiUrl}/orders/${orderId}`);
+      if (res.data.success && res.data.data) {
+        setLiveOrder(res.data.data);
+        setCurrentStatus(res.data.data.status);
+        toast.success('Status updated!', { id: toastId });
+      } else {
+        toast.error('Failed to update status', { id: toastId });
+      }
+    } catch (err) {
+      console.error('Error refreshing order:', err);
+      toast.error('Failed to update status', { id: toastId });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (!isOpen || !liveOrder) return null;
 
@@ -141,6 +161,29 @@ export default function OrderStatusModal({ isOpen, onClose, order, onDismiss }: 
     return 0; // pending
   };
 
+  const formatScheduledTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      
+      const dayName = days[d.getDay()];
+      const monthName = months[d.getMonth()];
+      const dateNum = d.getDate();
+      
+      let hours = d.getHours();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      
+      return `${dayName}, ${monthName} ${dateNum} at ${hours}:${minutes} ${ampm}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   const currentStepIdx = getStatusIndex(currentStatus);
 
   return (
@@ -160,12 +203,25 @@ export default function OrderStatusModal({ isOpen, onClose, order, onDismiss }: 
             </span>
             <span className="text-xs font-bold text-neutral-800">Live Order Tracker</span>
           </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 hover:bg-neutral-200 cursor-pointer"
-          >
-            <X size={15} />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isSimulated && (
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-50 border border-neutral-200 text-neutral-500 hover:bg-neutral-100 hover:text-brand-primary cursor-pointer active:scale-95 transition-all"
+                title="Refresh order status"
+              >
+                <RotateCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 hover:bg-neutral-200 cursor-pointer"
+            >
+              <X size={15} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -186,6 +242,12 @@ export default function OrderStatusModal({ isOpen, onClose, order, onDismiss }: 
             <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest leading-none">
               Order No: #{liveOrder.orderNumber || 'Online-' + Math.floor(100 + Math.random() * 900)}
             </p>
+            {liveOrder.orderTiming === 'later' && liveOrder.scheduledAt && (
+              <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 border border-orange-100 text-brand-primary rounded-xl text-[9px] font-extrabold uppercase tracking-wider">
+                <Clock size={11} strokeWidth={2.5} />
+                <span>Scheduled for: {formatScheduledTime(liveOrder.scheduledAt)}</span>
+              </div>
+            )}
             {isSimulated && (
               <span className="inline-block bg-neutral-100 text-neutral-500 text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-neutral-200 mt-1">
                 Demo Simulation Mode
@@ -204,17 +266,26 @@ export default function OrderStatusModal({ isOpen, onClose, order, onDismiss }: 
             </div>
           ) : (
             /* Progress Tracker timeline */
-            <div className="relative pl-7 space-y-6 border-l-2 border-neutral-100 ml-4 py-2">
+            <div className="relative pl-7 ml-4 py-2">
               {steps.map((step, idx) => {
                 const isActive = idx <= currentStepIdx;
                 const isCurrent = idx === currentStepIdx;
                 const StepIcon = step.icon;
 
                 return (
-                  <div key={step.key} className="relative group">
+                  <div key={step.key} className="relative pb-6 last:pb-0">
+                    {/* Line connecting to next step */}
+                    {idx < steps.length - 1 && (
+                      <div
+                        className={`absolute left-[-29px] top-[26px] bottom-0 w-[2px] ${
+                          idx < currentStepIdx ? 'bg-emerald-500' : 'bg-neutral-100'
+                        }`}
+                      />
+                    )}
+
                     {/* Circle Anchor indicator */}
                     <div
-                      className={`absolute -left-[37px] top-0.5 w-6 h-6 rounded-full border flex items-center justify-center transition-all ${
+                      className={`absolute -left-[41px] top-0.5 w-6 h-6 rounded-full border flex items-center justify-center transition-all ${
                         isCurrent
                           ? 'bg-brand-primary border-brand-primary text-white scale-110 shadow-md shadow-brand-primary/20'
                           : isActive
