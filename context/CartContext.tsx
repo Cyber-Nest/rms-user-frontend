@@ -120,6 +120,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         quantity,
         totalPrice: roundToTwo(itemUnitCost * quantity),
         note,
+        kitchenLabel: menuItem.kitchenLabel || 'chicken',
       };
       updatedCartItems.push(newItem);
     }

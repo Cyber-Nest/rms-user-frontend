@@ -400,6 +400,7 @@ function CheckoutModalInner({
         quantity: item.quantity,
         totalPrice: item.totalPrice,
         note: item.note || "",
+        kitchenLabel: item.kitchenLabel || 'chicken',
       })),
       subtotal: subtotal,
       tax: tax,

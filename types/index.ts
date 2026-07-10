@@ -20,6 +20,7 @@ export interface MenuItem {
   itemType: MenuItemType;
   modifierGroupIds?: string[];
   modifierGroups?: ModifierGroup[];
+  kitchenLabel?: 'chicken' | 'pizza';
 }
 
 export interface ModifierOption {
@@ -60,4 +61,5 @@ export interface CartItem {
   quantity: number;
   totalPrice: number; // (basePrice + sum(selectedModifiers.price)) * quantity
   note?: string;
+  kitchenLabel?: 'chicken' | 'pizza';
 }
