@@ -121,7 +121,7 @@ function CheckoutModalInner({
   // Form validity validator
   const isFormInvalid = useMemo(() => {
     if (!name.trim()) return true;
-    if (!phone.trim() || phone.trim().replace(/\D/g, "").length < 10)
+    if (!phone.trim() || phone.trim().replace(/\D/g, "").length !== 10)
       return true;
     if (orderType === "delivery" && !addressInput.trim()) return true;
     if (timingMode === "later" && (!selectedDate || !selectedTimeSlot))
@@ -282,8 +282,8 @@ function CheckoutModalInner({
     e.preventDefault();
 
     if (!name.trim()) return toast.error("Please enter your name");
-    if (!phone.trim() || phone.length < 10)
-      return toast.error("Please enter a valid phone number");
+    if (!phone.trim() || phone.replace(/\D/g, "").length !== 10)
+      return toast.error("Please enter a valid 10-digit phone number");
     if (orderType === "delivery" && !addressInput.trim())
       return toast.error("Please enter a delivery address");
 
@@ -535,7 +535,14 @@ function CheckoutModalInner({
                     type="text"
                     required
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[0-9]/g, ""); // Strip out numbers
+                      const capitalized = val
+                        .split(" ")
+                        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(" ");
+                      setName(capitalized);
+                    }}
                     placeholder="Enter your name"
                     className="w-full bg-white border border-neutral-200 rounded-xl pl-9 pr-3 py-2 text-xs text-neutral-700 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
                   />
@@ -556,11 +563,19 @@ function CheckoutModalInner({
                     type="tel"
                     required
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="(555) 555-5555"
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      setPhone(val);
+                    }}
+                    placeholder="Enter 10-digit number"
                     className="w-full bg-white border border-neutral-200 rounded-xl pl-9 pr-3 py-2 text-xs text-neutral-700 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
                   />
                 </div>
+                {phone.length > 0 && phone.length < 10 && (
+                  <p className="text-[9.5px] text-red-500 font-semibold mt-1">
+                    Must be exactly 10 digits (Current: {phone.length}/10)
+                  </p>
+                )}
               </div>
             </div>
 

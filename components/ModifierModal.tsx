@@ -276,8 +276,8 @@ export default function ModifierModal({
                     </div>
                   )}
 
-                  {/* Thumbnail Image for Card type */}
-                  {isCard && (
+                  {/* Thumbnail Image for Card type or if option has an image */}
+                  {(isCard || !!opt.image) && (
                     <div className="w-10 h-10 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200 flex-shrink-0">
                       <img
                         src={
