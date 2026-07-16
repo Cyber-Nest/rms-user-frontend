@@ -94,6 +94,7 @@ function CheckoutModalInner({
   const [email, setEmail] = useState("");
   const [addressInput, setAddressInput] = useState(address);
   const [notes, setNotes] = useState("");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   const getTodayLocalString = () => {
     const d = new Date();
@@ -152,6 +153,7 @@ function CheckoutModalInner({
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
+        setCoords({ lat: latitude, lng: longitude });
         try {
           // OpenStreetMap Nominatim reverse geocoding API
           const response = await axios.get(
@@ -287,6 +289,23 @@ function CheckoutModalInner({
     if (orderType === "delivery" && !addressInput.trim())
       return toast.error("Please enter a delivery address");
 
+    let lat = coords?.lat || null;
+    let lng = coords?.lng || null;
+
+    if (orderType === "delivery" && !lat && !lng) {
+      try {
+        const response = await axios.get(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressInput)}&limit=1`
+        );
+        if (response.data && response.data.length > 0) {
+          lat = parseFloat(response.data[0].lat);
+          lng = parseFloat(response.data[0].lon);
+        }
+      } catch (err) {
+        console.error("Geocoding failed:", err);
+      }
+    }
+
     // Parse scheduled date if timingMode is 'later'
     let scheduledAt: Date | null = null;
     let dueAt: Date | null = null;
@@ -421,6 +440,8 @@ function CheckoutModalInner({
         phone: phone,
         email: email || "",
         address: orderType === "delivery" ? addressInput : "",
+        lat: orderType === "delivery" ? lat : null,
+        lng: orderType === "delivery" ? lng : null,
       },
       notes: notes,
       status: "pending",

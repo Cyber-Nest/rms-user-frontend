@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
+import Pusher from "pusher-js";
 import toast from "react-hot-toast";
 import {
   ShoppingBag,
@@ -63,6 +64,7 @@ export default function HomePage() {
   const [activeOrder, setActiveOrder] = useState<any | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [autoOpenMap, setAutoOpenMap] = useState(false);
 
   // Fetch Menu from API (with local fallback)
   useEffect(() => {
@@ -110,6 +112,41 @@ export default function HomePage() {
       }
     }
   }, []);
+
+  // Real-time Pusher sync for ALL active orders (Replaced 15s polling to save DB calls)
+  useEffect(() => {
+    if (!activeOrder) return;
+
+    const orderId = activeOrder._id || activeOrder.id;
+    const isMock = String(orderId).startsWith('mock-');
+    if (isMock) return;
+
+    const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "app-key";
+    const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "mt1";
+
+    const pusher = new Pusher(pusherKey, {
+      cluster: pusherCluster,
+      forceTLS: true,
+    });
+
+    const channel = pusher.subscribe("orders");
+    channel.bind("order-updated", (data: any) => {
+      // If the incoming status update belongs to this active order
+      if (data._id === orderId) {
+        setActiveOrder((prev: any) => {
+          const updatedOrder = { ...prev, ...data };
+          localStorage.setItem("cd_active_order", JSON.stringify(updatedOrder));
+          return updatedOrder;
+        });
+      }
+    });
+
+    return () => {
+      channel.unbind_all();
+      pusher.unsubscribe("orders");
+      pusher.disconnect();
+    };
+  }, [activeOrder?.orderType, activeOrder?._id, activeOrder?.id]);
 
   const handlePlaceOrder = async (orderPayload: any) => {
     setIsPlacingOrder(true);
@@ -921,6 +958,75 @@ export default function HomePage() {
         onClose={() => setActiveItem(null)}
       />
 
+      {/* ── STICKY ACTIVE ORDER WIDGET ── */}
+      {activeOrder && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md bg-white/95 backdrop-blur-md border border-neutral-200/80 text-neutral-800 rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3.5 animate-fade-in transition-all duration-300 hover:border-neutral-300/80 hover:shadow-[0_16px_50px_rgba(0,0,0,0.16)] select-none">
+          <div
+            onClick={() => {
+              setAutoOpenMap(false);
+              setShowStatusModal(true);
+            }}
+            className="flex-1 min-w-0 cursor-pointer flex items-center gap-3"
+          >
+            {/* Status icon with animated pulse */}
+            <div className="relative flex-shrink-0 w-10 h-10 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center">
+              <ShoppingBag size={18} className="text-brand-primary" />
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-primary"></span>
+              </span>
+            </div>
+
+            {/* Content info */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-black text-brand-primary uppercase tracking-widest leading-none">
+                  {activeOrder.status === 'pending' && 'Order Placed'}
+                  {activeOrder.status === 'preparing' && 'Preparing'}
+                  {activeOrder.status === 'ready' && 'Out for Delivery'}
+                  {activeOrder.status === 'completed' && 'Delivered'}
+                  {activeOrder.status === 'cancelled' && 'Cancelled'}
+                </span>
+              </div>
+              <h4 className="text-[13px] font-black text-neutral-800 truncate mt-1 leading-snug">
+                {activeOrder.items?.[0]?.name || 'Your Order'}
+                {activeOrder.items?.length > 1 ? ` + ${activeOrder.items.length - 1} items` : ''}
+              </h4>
+              <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed truncate">
+                {activeOrder.status === 'pending' && 'Waiting for branch confirmation'}
+                {activeOrder.status === 'preparing' && 'Kitchen is cooking your meal'}
+                {activeOrder.status === 'ready' && 'Driver is en route to you!'}
+                {activeOrder.status === 'completed' && 'Enjoy your hot meal!'}
+              </p>
+            </div>
+          </div>
+
+          {/* Right Action */}
+          {activeOrder.orderType === 'delivery' && activeOrder.status === 'ready' ? (
+            <button
+              onClick={() => {
+                setAutoOpenMap(true);
+                setShowStatusModal(true);
+              }}
+              className="flex-shrink-0 bg-brand-primary hover:bg-brand-primary-hover text-white text-[11px] font-extrabold py-2.5 px-4 rounded-xl flex items-center gap-1.5 shadow-md shadow-brand-primary/20 hover:shadow-brand-primary/30 transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap"
+            >
+              <MapPin size={13} className="text-white" />
+              <span>Track Map</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setAutoOpenMap(false);
+                setShowStatusModal(true);
+              }}
+              className="flex-shrink-0 w-8 h-8 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-neutral-700 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <ChevronRight size={16} />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── CHECKOUT MODAL ── */}
       <CheckoutModal
         isOpen={showCheckoutModal}
@@ -945,6 +1051,7 @@ export default function HomePage() {
           onClose={() => setShowStatusModal(false)}
           order={activeOrder}
           onDismiss={handleDismissActiveOrder}
+          autoOpenMap={autoOpenMap}
         />
       )}
     </div>
