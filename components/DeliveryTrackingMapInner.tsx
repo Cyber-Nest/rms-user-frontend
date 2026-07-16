@@ -208,7 +208,7 @@ export default function DeliveryTrackingMapInner({
     });
 
     // Listen for driver location streamed directly
-    channel.bind("client-driver-location", (data: any) => {
+    channel.bind("driver-location-update", (data: any) => {
       const targetLat = data.lat;
       const targetLng = data.lng;
       
