@@ -705,9 +705,9 @@ export default function OrderStatusModal({
               customerCoords={
                 liveOrder.customer?.lat && liveOrder.customer?.lng
                   ? { lat: liveOrder.customer.lat, lng: liveOrder.customer.lng }
-                  : userLocation || { lat: 50.037, lng: -110.66 }
+                  : userLocation || { lat: 22.1818, lng: 78.7618 }
               }
-              restaurantCoords={userLocation || { lat: 50.028, lng: -110.677 }}
+              restaurantCoords={userLocation || { lat: 22.1818, lng: 78.7618 }}
               onDeliveryComplete={() => {
                 setCurrentStatus("completed");
                 setLiveOrder((prev: any) => ({ ...prev, status: "completed" }));
