@@ -392,11 +392,11 @@ export default function HomePage() {
               </span>
             </div>
             <h2 className="text-base font-black text-neutral-900 mt-1 leading-tight">
-              Chicken Delight - Strathmore Branch
+              Chicken Delight - Downtown Main
             </h2>
             <p className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1 font-medium">
               <MapPin size={11} className="text-neutral-400" />
-              231 Edgefield Pl, Strathmore, AB, T1P 0E8
+              231 Edgefield Pl, Downtown Main, AB, T1P 0E8
             </p>
           </div>
         </div>
