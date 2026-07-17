@@ -48,7 +48,7 @@ function createDriverIcon(color: string, bearing: number) {
   const size = 38;
   const glowSize = size + 16;
   const html = `
-    <div style="width: ${glowSize}px; height: ${glowSize}px; position: relative; transform: rotate(${bearing}deg); transition: transform 0.4s ease-out;">
+    <div style="width: ${glowSize}px; height: ${glowSize}px; position: relative;">
       <div style="
         position: absolute; inset: 0;
         border-radius: 50%;
@@ -176,8 +176,9 @@ export default function DeliveryTrackingMapInner({
 
   const prevPosRef = useRef<[number, number] | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const lastEventTimeRef = useRef<number>(Date.now());
 
-  // Pusher setup for real-time tracking
+  // Pusher setup for real-time tracking via client events (browser-to-browser)
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY || "fc1a170b04cd047c782b";
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap2";
@@ -191,49 +192,42 @@ export default function DeliveryTrackingMapInner({
 
     const channel = pusher.subscribe(`private-order-${orderId}`);
 
-    // Request immediate location ping upon connection
-    let retryInterval: NodeJS.Timeout;
-    
-    channel.bind("pusher:subscription_succeeded", () => {
-      channel.trigger("client-request-location", { request: true });
-      
-      // Retry every 3 seconds if we still don't have driverPos
-      retryInterval = setInterval(() => {
-        if (!prevPosRef.current) {
-          channel.trigger("client-request-location", { request: true });
-        } else {
-          clearInterval(retryInterval);
-        }
-      }, 3000);
-    });
-
-    // Listen for driver location streamed directly
-    channel.bind("driver-location-update", (data: any) => {
+    // Listen for driver location via Pusher client events (direct from driver browser)
+    // No client-request-location needed — driver broadcasts every 3-5 seconds,
+    // so within a few seconds of subscribing we'll receive the first position.
+    channel.bind("client-driver-location", (data: any) => {
       const targetLat = data.lat;
       const targetLng = data.lng;
       
       setLastUpdate(Date.now());
       setBearing(data.bearing || 0);
 
-      // Cancel any active interpolation animation to prevent concurrent frame fighting (jitter)
+      // Cancel any active interpolation animation to prevent concurrent frame fighting
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+
+      // ─── Adaptive animation duration ───
+      const now = Date.now();
+      const timeSinceLast = now - lastEventTimeRef.current;
+      lastEventTimeRef.current = now;
+      // Fill 85% of the gap between events — no freeze zone
+      // Clamp between 1s min and 8s max for safety
+      const duration = Math.max(1000, Math.min(timeSinceLast * 0.85, 8000));
 
       // Interpolate transition
       const fromLat = prevPosRef.current ? prevPosRef.current[0] : targetLat;
       const fromLng = prevPosRef.current ? prevPosRef.current[1] : targetLng;
       
       const startTime = performance.now();
-      const duration = 2000;
 
       const animate = (time: number) => {
         const elapsed = time - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
 
-        const lat = fromLat + (targetLat - fromLat) * eased;
-        const lng = fromLng + (targetLng - fromLng) * eased;
+        // Linear easing for steady, constant-speed movement
+        const lat = fromLat + (targetLat - fromLat) * progress;
+        const lng = fromLng + (targetLng - fromLng) * progress;
 
         setDriverPos([lat, lng]);
 
@@ -256,7 +250,6 @@ export default function DeliveryTrackingMapInner({
     });
 
     return () => {
-      if (retryInterval) clearInterval(retryInterval);
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
       }
