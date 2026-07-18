@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import Pusher from "pusher-js";
@@ -24,22 +30,33 @@ function MapEventTracker({ onInteraction }: MapEventTrackerProps) {
 const toRad = (value: number) => (value * Math.PI) / 180;
 const toDeg = (value: number) => (value * 180) / Math.PI;
 
-const getDistanceMeters = (pos1: { lat: number; lng: number }, pos2: { lat: number; lng: number }) => {
+const getDistanceMeters = (
+  pos1: { lat: number; lng: number },
+  pos2: { lat: number; lng: number },
+) => {
   const R = 6371000;
   const dLat = toRad(pos2.lat - pos1.lat);
   const dLng = toRad(pos2.lng - pos1.lng);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(pos1.lat)) * Math.cos(toRad(pos2.lat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    Math.cos(toRad(pos1.lat)) *
+      Math.cos(toRad(pos2.lat)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const getBearing = (from: { lat: number; lng: number }, to: { lat: number; lng: number }) => {
+const getBearing = (
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+) => {
   const dLng = toRad(to.lng - from.lng);
   const fromLatRad = toRad(from.lat);
   const toLatRad = toRad(to.lat);
   const y = Math.sin(dLng) * Math.cos(toLatRad);
-  const x = Math.cos(fromLatRad) * Math.sin(toLatRad) - Math.sin(fromLatRad) * Math.cos(toLatRad) * Math.cos(dLng);
+  const x =
+    Math.cos(fromLatRad) * Math.sin(toLatRad) -
+    Math.sin(fromLatRad) * Math.cos(toLatRad) * Math.cos(dLng);
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 };
 
@@ -68,16 +85,12 @@ function createDriverIcon(color: string, bearing: number) {
         display: flex; align-items: center; justify-content: center;
       ">
         <div style="
-          width: 80%; height: 80%;
+          width: 90%; height: 90%;
           border-radius: 50%;
           background: ${color};
           display: flex; align-items: center; justify-content: center;
         ">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 55%; height: 55%;">
-            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-            <circle cx="7" cy="17" r="2" fill="white" />
-            <circle cx="17" cy="17" r="2" fill="white" />
-          </svg>
+          <img src="/car1.png" style="width: 105%; height: 105%; object-fit: contain;" />
         </div>
       </div>
     </div>
@@ -115,7 +128,12 @@ interface BoundsControllerProps {
   autoFollow: boolean;
 }
 
-function BoundsController({ driverPos, customerCoords, restaurantCoords, autoFollow }: BoundsControllerProps) {
+function BoundsController({
+  driverPos,
+  customerCoords,
+  restaurantCoords,
+  autoFollow,
+}: BoundsControllerProps) {
   const map = useMap();
   const initRef = useRef(false);
 
@@ -172,7 +190,9 @@ export default function DeliveryTrackingMapInner({
   const [bearing, setBearing] = useState(0);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [autoFollow, setAutoFollow] = useState(true);
-  const [freshness, setFreshness] = useState<"live" | "updating" | "offline">("updating");
+  const [freshness, setFreshness] = useState<"live" | "updating" | "offline">(
+    "updating",
+  );
 
   const prevPosRef = useRef<[number, number] | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -182,7 +202,8 @@ export default function DeliveryTrackingMapInner({
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY || "fc1a170b04cd047c782b";
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap2";
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
     const pusher = new Pusher(key, {
       cluster,
@@ -198,7 +219,7 @@ export default function DeliveryTrackingMapInner({
     channel.bind("client-driver-location", (data: any) => {
       const targetLat = data.lat;
       const targetLng = data.lng;
-      
+
       setLastUpdate(Date.now());
       setBearing(data.bearing || 0);
 
@@ -218,7 +239,7 @@ export default function DeliveryTrackingMapInner({
       // Interpolate transition
       const fromLat = prevPosRef.current ? prevPosRef.current[0] : targetLat;
       const fromLng = prevPosRef.current ? prevPosRef.current[1] : targetLng;
-      
+
       const startTime = performance.now();
 
       const animate = (time: number) => {
@@ -309,10 +330,16 @@ export default function DeliveryTrackingMapInner({
         />
 
         {/* Restaurant Pin */}
-        <Marker position={[restaurantCoords.lat, restaurantCoords.lng]} icon={restaurantIcon} />
+        <Marker
+          position={[restaurantCoords.lat, restaurantCoords.lng]}
+          icon={restaurantIcon}
+        />
 
         {/* Customer Address Pin */}
-        <Marker position={[customerCoords.lat, customerCoords.lng]} icon={customerIcon} />
+        <Marker
+          position={[customerCoords.lat, customerCoords.lng]}
+          icon={customerIcon}
+        />
 
         {/* Driver Live Marker */}
         {driverPos && <Marker position={driverPos} icon={driverIcon} />}
@@ -344,7 +371,9 @@ export default function DeliveryTrackingMapInner({
             {driverInfo?.name || "Driver Assigned"}
           </h4>
           <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wide">
-            {driverInfo?.vehicleNumber ? `Vehicle #${driverInfo.vehicleNumber}` : "En Route"}
+            {driverInfo?.vehicleNumber
+              ? `Vehicle #${driverInfo.vehicleNumber}`
+              : "En Route"}
           </span>
         </div>
 
@@ -366,8 +395,8 @@ export default function DeliveryTrackingMapInner({
                 freshness === "live"
                   ? "bg-emerald-400"
                   : freshness === "updating"
-                  ? "bg-amber-400"
-                  : "bg-red-400"
+                    ? "bg-amber-400"
+                    : "bg-red-400"
               }`}
             ></span>
             <span
@@ -375,13 +404,17 @@ export default function DeliveryTrackingMapInner({
                 freshness === "live"
                   ? "bg-emerald-500"
                   : freshness === "updating"
-                  ? "bg-amber-500"
-                  : "bg-red-500"
+                    ? "bg-amber-500"
+                    : "bg-red-500"
               }`}
             ></span>
           </span>
           <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider">
-            {freshness === "live" ? "Live" : freshness === "updating" ? "Buffering" : "Offline"}
+            {freshness === "live"
+              ? "Live"
+              : freshness === "updating"
+                ? "Buffering"
+                : "Offline"}
           </span>
         </div>
       </div>
