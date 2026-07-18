@@ -124,6 +124,8 @@ function CheckoutModalInner({
     if (!name.trim()) return true;
     if (!phone.trim() || phone.trim().replace(/\D/g, "").length !== 10)
       return true;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email)) return true;
     if (orderType === "delivery" && !addressInput.trim()) return true;
     if (timingMode === "later" && (!selectedDate || !selectedTimeSlot))
       return true;
@@ -132,6 +134,7 @@ function CheckoutModalInner({
   }, [
     name,
     phone,
+    email,
     orderType,
     addressInput,
     timingMode,
@@ -286,6 +289,9 @@ function CheckoutModalInner({
     if (!name.trim()) return toast.error("Please enter your name");
     if (!phone.trim() || phone.replace(/\D/g, "").length !== 10)
       return toast.error("Please enter a valid 10-digit phone number");
+    if (!email.trim()) return toast.error("Please enter your email");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return toast.error("Please enter a valid email address");
     if (orderType === "delivery" && !addressInput.trim())
       return toast.error("Please enter a delivery address");
 
@@ -600,10 +606,10 @@ function CheckoutModalInner({
               </div>
             </div>
 
-            {/* Email (Optional) */}
+            {/* Email */}
             <div className="space-y-1">
               <label className="block text-[9px] font-bold text-neutral-500 uppercase tracking-wide">
-                Email (Optional)
+                Email Address *
               </label>
               <div className="relative">
                 <Mail
@@ -612,6 +618,7 @@ function CheckoutModalInner({
                 />
                 <input
                   type="email"
+                  required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
