@@ -505,10 +505,15 @@ export default function HomePage() {
               {filteredItems.map((item) => {
                 const hasModifiers =
                   item.modifierGroups && item.modifierGroups.length > 0;
+                const isOutOfStock = !!item.isOutOfStock;
                 return (
                   <div
                     key={item.id}
-                    className="flex flex-row sm:flex-col bg-white rounded-2xl border border-neutral-200/60 overflow-hidden p-3 sm:p-3.5 gap-3.5 hover:shadow-lg hover:border-neutral-300/40 transition-all duration-200 group"
+                    className={`flex flex-row sm:flex-col bg-white rounded-2xl border overflow-hidden p-3 sm:p-3.5 gap-3.5 transition-all duration-200 ${
+                      isOutOfStock
+                        ? "border-neutral-200 bg-neutral-50/70 opacity-65 cursor-not-allowed select-none"
+                        : "border-neutral-200/60 hover:shadow-lg hover:border-neutral-300/40 group"
+                    }`}
                   >
                     {/* Food Image Container */}
                     <div className="relative h-[95px] w-[95px] sm:h-[130px] sm:w-full bg-neutral-50 rounded-xl overflow-hidden flex-shrink-0">
@@ -522,10 +527,18 @@ export default function HomePage() {
                           (e.target as HTMLImageElement).src =
                             "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=300&auto=format&fit=crop&q=60";
                         }}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className={`w-full h-full object-cover transition-transform duration-300 ${!isOutOfStock ? "group-hover:scale-105" : "grayscale"}`}
                       />
+                      {/* Out of Stock Overlay */}
+                      {isOutOfStock && (
+                        <div className="absolute inset-0 bg-neutral-900/50 z-20 flex items-center justify-center">
+                          <span className="bg-neutral-800 text-white text-[9px] sm:text-[10px] font-900 uppercase tracking-wider px-2.5 py-1 rounded-md border border-neutral-700/80 shadow-md">
+                            Out of stock
+                          </span>
+                        </div>
+                      )}
                       {/* Badge (e.g. Popular, New) */}
-                      {item.badge && (
+                      {item.badge && !isOutOfStock && (
                         <span className="absolute top-2 left-2 bg-brand-primary text-white text-[8px] sm:text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-sm">
                           <Flame
                             size={9}
@@ -539,7 +552,7 @@ export default function HomePage() {
                     {/* Food Info */}
                     <div className="flex-1 flex flex-col justify-between gap-1.5 sm:gap-3 min-w-0">
                       <div>
-                        <h3 className="text-xs sm:text-[13px] font-extrabold text-neutral-800 leading-snug group-hover:text-brand-primary transition-colors truncate sm:whitespace-normal">
+                        <h3 className={`text-xs sm:text-[13px] font-extrabold leading-snug truncate sm:whitespace-normal ${isOutOfStock ? "text-neutral-450" : "text-neutral-800 group-hover:text-brand-primary transition-colors"}`}>
                           {item.name}
                         </h3>
                         <p className="text-[9.5px] sm:text-[10px] text-neutral-400 font-medium leading-relaxed mt-1 sm:mt-1.5 line-clamp-2">
@@ -553,16 +566,27 @@ export default function HomePage() {
                           <p className="text-[8.5px] sm:text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
                             Price
                           </p>
-                          <p className="text-[12px] sm:text-[14px] font-black text-neutral-800">
+                          <p className={`text-[12px] sm:text-[14px] font-black ${isOutOfStock ? "text-neutral-400" : "text-neutral-800"}`}>
                             ${item.price.toFixed(2)}
                           </p>
                         </div>
                         <button
-                          onClick={() => handleOpenModifiers(item)}
-                          className="bg-brand-primary text-white hover:bg-brand-primary-hover px-2.5 py-1.5 sm:p-2.5 rounded-lg sm:rounded-xl shadow-md shadow-brand-primary/10 active:scale-90 transition-all flex items-center justify-center gap-1 cursor-pointer font-bold text-[10px] sm:text-xs"
+                          onClick={() => !isOutOfStock && handleOpenModifiers(item)}
+                          disabled={isOutOfStock}
+                          className={`px-2.5 py-1.5 sm:p-2.5 rounded-lg sm:rounded-xl shadow-md transition-all flex items-center justify-center gap-1 font-bold text-[10px] sm:text-xs ${
+                            isOutOfStock
+                              ? "bg-neutral-200 border border-neutral-350 text-neutral-400 cursor-not-allowed shadow-none"
+                              : "bg-brand-primary text-white hover:bg-brand-primary-hover shadow-brand-primary/10 active:scale-90 cursor-pointer"
+                          }`}
                         >
-                          <Plus size={12} strokeWidth={3} />
-                          <span>{hasModifiers ? "Customize" : "Add"}</span>
+                          {!isOutOfStock ? (
+                            <>
+                              <Plus size={12} strokeWidth={3} />
+                              <span>{hasModifiers ? "Customize" : "Add"}</span>
+                            </>
+                          ) : (
+                            <span>Out of stock</span>
+                          )}
                         </button>
                       </div>
                     </div>
