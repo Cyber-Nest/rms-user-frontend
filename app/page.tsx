@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import Pusher from "pusher-js";
 import toast from "react-hot-toast";
 import {
   ShoppingBag,
@@ -113,40 +112,7 @@ export default function HomePage() {
     }
   }, []);
 
-  // Real-time Pusher sync for ALL active orders (Replaced 15s polling to save DB calls)
-  useEffect(() => {
-    if (!activeOrder) return;
 
-    const orderId = activeOrder._id || activeOrder.id;
-    const isMock = String(orderId).startsWith('mock-');
-    if (isMock) return;
-
-    const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "app-key";
-    const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "mt1";
-
-    const pusher = new Pusher(pusherKey, {
-      cluster: pusherCluster,
-      forceTLS: true,
-    });
-
-    const channel = pusher.subscribe("orders");
-    channel.bind("order-updated", (data: any) => {
-      // If the incoming status update belongs to this active order
-      if (data._id === orderId) {
-        setActiveOrder((prev: any) => {
-          const updatedOrder = { ...prev, ...data };
-          localStorage.setItem("cd_active_order", JSON.stringify(updatedOrder));
-          return updatedOrder;
-        });
-      }
-    });
-
-    return () => {
-      channel.unbind_all();
-      pusher.unsubscribe("orders");
-      pusher.disconnect();
-    };
-  }, [activeOrder?.orderType, activeOrder?._id, activeOrder?.id]);
 
   const handlePlaceOrder = async (orderPayload: any) => {
     setIsPlacingOrder(true);

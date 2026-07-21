@@ -10,7 +10,7 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import Pusher from "pusher-js";
+import { getPusherClient } from "../lib/pusher";
 import { LocateFixed, Navigation, MapPin, Phone, Plus, Minus, Maximize2, Minimize2 } from "lucide-react";
 
 // --- Map Interaction Tracker ---
@@ -239,23 +239,11 @@ export default function DeliveryTrackingMapInner({
 
   // Pusher setup for real-time tracking via client events (browser-to-browser)
   useEffect(() => {
-    const key = process.env.NEXT_PUBLIC_PUSHER_KEY || "fc1a170b04cd047c782b";
-    const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap2";
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-
-    const pusher = new Pusher(key, {
-      cluster,
-      forceTLS: true,
-      authEndpoint: `${apiUrl}/delivery/auth`,
-    });
-
+    const pusher = getPusherClient();
     const channel = pusher.subscribe(`private-order-${orderId}`);
 
-    // Listen for driver location via Pusher client events (direct from driver browser)
-    // No client-request-location needed — driver broadcasts every 3-5 seconds,
-    // so within a few seconds of subscribing we'll receive the first position.
-    channel.bind("client-driver-location", (data: any) => {
+    // Listen for driver location (client events or server-relay fallback)
+    const handleDriverLocation = (data: any) => {
       const targetLat = data.lat;
       const targetLng = data.lng;
 
@@ -300,7 +288,10 @@ export default function DeliveryTrackingMapInner({
       };
 
       animationFrameRef.current = requestAnimationFrame(animate);
-    });
+    };
+
+    channel.bind("client-driver-location", handleDriverLocation);
+    channel.bind("driver-location-update", handleDriverLocation);
 
     // Listen for server status triggers
     channel.bind("delivery-status-update", (data: any) => {
@@ -315,7 +306,6 @@ export default function DeliveryTrackingMapInner({
       }
       channel.unbind_all();
       pusher.unsubscribe(`private-order-${orderId}`);
-      pusher.disconnect();
     };
   }, [orderId, onDeliveryComplete]);
 

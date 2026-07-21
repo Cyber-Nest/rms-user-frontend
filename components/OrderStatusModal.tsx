@@ -17,7 +17,7 @@ import {
 import axios from "axios";
 import toast from "react-hot-toast";
 import DeliveryTrackingMap from "./DeliveryTrackingMap";
-import Pusher from "pusher-js";
+import { getPusherClient } from "../lib/pusher";
 
 interface OrderStatusModalProps {
   isOpen: boolean;
@@ -142,16 +142,7 @@ export default function OrderStatusModal({
     const orderId = order?._id || order?.id;
     if (!isOpen || !orderId || String(orderId).startsWith('mock-')) return;
 
-    const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY || "fc1a170b04cd047c782b";
-    const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "ap2";
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-
-    const pusher = new Pusher(pusherKey, {
-      cluster: pusherCluster,
-      forceTLS: true,
-      authEndpoint: `${apiUrl}/delivery/auth`,
-    });
-
+    const pusher = getPusherClient();
     const channel = pusher.subscribe(`private-order-${orderId}`);
 
     // Listen for order updates (status, kitchenCleared, etc.)
@@ -207,7 +198,6 @@ export default function OrderStatusModal({
     return () => {
       channel.unbind_all();
       pusher.unsubscribe(`private-order-${orderId}`);
-      pusher.disconnect();
     };
   }, [isOpen, order?._id, order?.id]);
 
