@@ -11,7 +11,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import Pusher from "pusher-js";
-import { LocateFixed, Navigation, MapPin, Phone } from "lucide-react";
+import { LocateFixed, Navigation, MapPin, Phone, Plus, Minus, Maximize2, Minimize2 } from "lucide-react";
 
 // --- Map Interaction Tracker ---
 interface MapEventTrackerProps {
@@ -194,6 +194,45 @@ export default function DeliveryTrackingMapInner({
     "updating",
   );
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const mapRef = useRef<L.Map | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Fullscreen listener
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  const handleZoomIn = () => mapRef.current?.zoomIn();
+  const handleZoomOut = () => mapRef.current?.zoomOut();
+
+  const handleRecenterOrFollow = () => {
+    setAutoFollow(true);
+    if (mapRef.current) {
+      if (driverPos) {
+        mapRef.current.panTo(driverPos, { animate: true, duration: 1 });
+      } else {
+        const bounds = L.latLngBounds([
+          [restaurantCoords.lat, restaurantCoords.lng],
+          [customerCoords.lat, customerCoords.lng],
+        ]);
+        mapRef.current.fitBounds(bounds, { padding: [40, 40] });
+      }
+    }
+  };
+
+  const toggleFullscreen = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
+
   const prevPosRef = useRef<[number, number] | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastEventTimeRef = useRef<number>(Date.now());
@@ -308,12 +347,13 @@ export default function DeliveryTrackingMapInner({
   const customerIcon = createPinIcon("#16A34A", "You");
 
   return (
-    <div className="absolute inset-0 w-full h-full bg-neutral-100">
+    <div ref={containerRef} className="absolute inset-0 w-full h-full bg-neutral-100">
       <MapContainer
         center={mapCenter}
         zoom={13}
         zoomControl={false}
         className="w-full h-full z-10"
+        ref={mapRef}
       >
         <MapResizer />
         <MapEventTracker onInteraction={() => setAutoFollow(false)} />
@@ -346,32 +386,63 @@ export default function DeliveryTrackingMapInner({
         {driverPos && <Marker position={driverPos} icon={driverIcon} />}
       </MapContainer>
 
-      {/* Map Control overlay (top right) */}
-      <div className="absolute top-3 right-3 z-30 flex flex-col gap-1.5">
-        {!autoFollow && driverPos && (
-          <button
-            onClick={() => setAutoFollow(true)}
-            className="p-2 rounded-xl bg-white shadow-md text-neutral-700 hover:text-black transition-colors cursor-pointer border border-neutral-100 flex items-center gap-1.5 text-xs font-bold"
-          >
-            <LocateFixed size={14} />
-            <span>Follow</span>
-          </button>
-        )}
+      {/* ─── Map Control Buttons Stack (Top Right) ─── */}
+      <div className="absolute top-4 right-4 z-30 flex flex-col gap-2">
+        <button
+          onClick={handleZoomIn}
+          className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl bg-white/90 backdrop-blur-md text-neutral-700 flex items-center justify-center hover:bg-white hover:text-neutral-950 hover:shadow-md active:scale-95 transition-all cursor-pointer border border-neutral-200/80 shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
+          title="Zoom in"
+        >
+          <Plus size={18} className="sm:size-4" strokeWidth={2.5} />
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl bg-white/90 backdrop-blur-md text-neutral-700 flex items-center justify-center hover:bg-white hover:text-neutral-950 hover:shadow-md active:scale-95 transition-all cursor-pointer border border-neutral-200/80 shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
+          title="Zoom out"
+        >
+          <Minus size={18} className="sm:size-4" strokeWidth={2.5} />
+        </button>
+        <div className="h-0.5" />
+        <button
+          onClick={handleRecenterOrFollow}
+          className={`relative w-10 h-10 sm:w-9 sm:h-9 rounded-xl bg-white/90 backdrop-blur-md text-neutral-700 flex items-center justify-center hover:bg-white hover:text-neutral-950 hover:shadow-md active:scale-95 transition-all cursor-pointer border shadow-[0_4px_12px_rgba(0,0,0,0.08)] ${
+            !autoFollow && driverPos
+              ? "border-amber-500/80 text-amber-600 bg-amber-50/90"
+              : "border-neutral-200/80"
+          }`}
+          title={!autoFollow ? "Enable driver follow" : "Recenter map"}
+        >
+          <LocateFixed size={18} className="sm:size-4" strokeWidth={2.5} />
+          {!autoFollow && driverPos && (
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border border-white animate-pulse" />
+          )}
+        </button>
+        <button
+          onClick={toggleFullscreen}
+          className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl bg-white/90 backdrop-blur-md text-neutral-700 flex items-center justify-center hover:bg-white hover:text-neutral-950 hover:shadow-md active:scale-95 transition-all cursor-pointer border border-neutral-200/80 shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
+          title="Toggle fullscreen"
+        >
+          {isFullscreen ? (
+            <Minimize2 size={18} className="sm:size-4" strokeWidth={2.5} />
+          ) : (
+            <Maximize2 size={18} className="sm:size-4" strokeWidth={2.5} />
+          )}
+        </button>
       </div>
 
-      {/* Driver info overlay (bottom left) */}
-      <div className="absolute bottom-3 left-3 z-30 bg-white/95 backdrop-blur-md border border-neutral-200/50 p-3 rounded-xl shadow-lg flex items-center gap-3 min-w-[200px]">
+      {/* Driver info overlay (bottom sheet on mobile, card on desktop) */}
+      <div className="absolute bottom-4 left-4 right-4 sm:right-auto z-30 bg-white/95 backdrop-blur-md border border-neutral-200/50 p-3.5 rounded-2xl shadow-xl flex items-center gap-3 sm:min-w-[280px]">
         <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white font-extrabold shrink-0"
-          style={{ backgroundColor: driverInfo?.color || "#3B82F6" }}
+          className="w-8.5 h-8.5 rounded-full flex items-center justify-center text-white font-extrabold shrink-0"
+          style={{ backgroundColor: driverInfo?.color || "#8a1538" }}
         >
-          <Navigation size={14} className="rotate-45" />
+          <Navigation size={15} className="rotate-45" />
         </div>
-        <div>
-          <h4 className="text-xs font-extrabold text-neutral-800 leading-tight">
+        <div className="flex-1 min-w-0">
+          <h4 className="text-xs font-extrabold text-neutral-800 leading-tight truncate">
             {driverInfo?.name || "Driver Assigned"}
           </h4>
-          <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wide">
+          <span className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wide truncate block">
             {driverInfo?.vehicleNumber
               ? `Vehicle #${driverInfo.vehicleNumber}`
               : "En Route"}
@@ -381,15 +452,15 @@ export default function DeliveryTrackingMapInner({
         {driverInfo?.phone && (
           <a
             href={`tel:${driverInfo.phone}`}
-            className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center hover:bg-emerald-100 transition-colors shadow-sm ml-1"
+            className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center hover:bg-emerald-100 transition-colors shadow-sm shrink-0"
             title="Call Driver"
           >
-            <Phone size={14} />
+            <Phone size={15} />
           </a>
         )}
 
         {/* Freshness Status Indicator */}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="flex items-center gap-1.5 shrink-0 pl-1 border-l border-neutral-100">
           <span className="relative flex h-2 w-2">
             <span
               className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
