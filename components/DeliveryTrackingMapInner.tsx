@@ -291,7 +291,6 @@ export default function DeliveryTrackingMapInner({
     };
 
     channel.bind("client-driver-location", handleDriverLocation);
-    channel.bind("driver-location-update", handleDriverLocation);
 
     // Listen for server status triggers
     channel.bind("delivery-status-update", (data: any) => {
