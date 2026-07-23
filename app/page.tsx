@@ -80,9 +80,9 @@ export default function HomePage() {
           throw new Error("API failed");
         }
       } catch (err) {
-        console.warn("API Error, loading fallback static menu items", err);
-        setCategories(fallbackCategories);
-        setMenuItems(fallbackMenuItems);
+        console.warn("API Error, backend menu data not available", err);
+        // setCategories(fallbackCategories);
+        // setMenuItems(fallbackMenuItems);
       } finally {
         setLoading(false);
       }
