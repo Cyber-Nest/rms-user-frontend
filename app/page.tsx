@@ -26,6 +26,8 @@ import CheckoutModal from "../components/CheckoutModal";
 import OrderStatusModal from "../components/OrderStatusModal";
 import { fallbackCategories, fallbackMenuItems } from "../data/menuData";
 
+import StoreLandingView, { BranchStore } from "../components/StoreLandingView";
+
 export default function HomePage() {
   const {
     cartItems,
@@ -46,10 +48,17 @@ export default function HomePage() {
     addToCart,
   } = useCart();
 
+  // Multi-Restaurant Branch States
+  const [branches, setBranches] = useState<BranchStore[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(true);
+  const [selectedBranch, setSelectedBranch] = useState<BranchStore | null>(
+    null,
+  );
+
   // Menu states
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("popular");
@@ -65,30 +74,98 @@ export default function HomePage() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [autoOpenMap, setAutoOpenMap] = useState(false);
 
-  // Fetch Menu from API (with local fallback)
+  // Load public branches and restore selected branch on mount
   useEffect(() => {
+    async function loadPublicBranches() {
+      setLoadingBranches(true);
+      try {
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+        const res = await axios.get(`${apiUrl}/branches/public`);
+        if (res.data.success && Array.isArray(res.data.data)) {
+          setBranches(res.data.data);
+
+          // Restore saved branch if valid
+          const savedBranchStr = localStorage.getItem("cd_user_branch");
+          if (savedBranchStr) {
+            try {
+              const parsed = JSON.parse(savedBranchStr);
+              const matched = res.data.data.find(
+                (b: BranchStore) => b._id === parsed._id,
+              );
+              if (matched) {
+                setSelectedBranch(matched);
+              }
+            } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load public branches:", err);
+      } finally {
+        setLoadingBranches(false);
+      }
+    }
+    loadPublicBranches();
+  }, []);
+
+  // Fetch Branch-Scoped Menu when selectedBranch changes
+  useEffect(() => {
+    if (!selectedBranch) return;
+    const currentBranchId = selectedBranch._id;
+
     async function loadMenu() {
       setLoading(true);
       try {
         const apiUrl =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-        const res = await axios.get(`${apiUrl}/menu/pos-feed`);
+        const res = await axios.get(`${apiUrl}/menu/pos-feed`, {
+          params: { branchId: currentBranchId },
+        });
         if (res.data.success) {
-          setCategories(res.data.data.categories);
-          setMenuItems(res.data.data.menuItems);
-        } else {
-          throw new Error("API failed");
+          setCategories(res.data.data.categories || []);
+          setMenuItems(res.data.data.menuItems || []);
         }
       } catch (err) {
-        console.warn("API Error, backend menu data not available", err);
-        // setCategories(fallbackCategories);
-        // setMenuItems(fallbackMenuItems);
+        console.warn("Error loading branch menu:", err);
       } finally {
         setLoading(false);
       }
     }
     loadMenu();
-  }, []);
+  }, [selectedBranch]);
+
+  const handleSelectBranch = (branch: BranchStore) => {
+    if (
+      cartItems.length > 0 &&
+      selectedBranch &&
+      selectedBranch._id !== branch._id
+    ) {
+      if (
+        confirm(
+          `Switching to ${branch.name} will clear your current cart. Continue?`,
+        )
+      ) {
+        clearCart();
+      } else {
+        return;
+      }
+    }
+    setSelectedBranch(branch);
+    localStorage.setItem("cd_user_branch", JSON.stringify(branch));
+  };
+
+  const handleSwitchStoreClick = () => {
+    if (cartItems.length > 0) {
+      if (
+        confirm("Changing store will clear your current bag items. Continue?")
+      ) {
+        clearCart();
+        setSelectedBranch(null);
+      }
+    } else {
+      setSelectedBranch(null);
+    }
+  };
 
   // Sync state input with context on load
   useEffect(() => {
@@ -112,14 +189,16 @@ export default function HomePage() {
     }
   }, []);
 
-
-
   const handlePlaceOrder = async (orderPayload: any) => {
     setIsPlacingOrder(true);
     try {
       const apiUrl =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-      const res = await axios.post(`${apiUrl}/orders`, orderPayload);
+      const finalPayload = {
+        ...orderPayload,
+        branchId: selectedBranch?._id || orderPayload.branchId,
+      };
+      const res = await axios.post(`${apiUrl}/orders`, finalPayload);
       if (res.data.success) {
         const createdOrder = res.data.data;
         setActiveOrder(createdOrder);
@@ -213,23 +292,47 @@ export default function HomePage() {
     }
   };
 
+  if (!selectedBranch) {
+    return (
+      <StoreLandingView
+        branches={branches}
+        loading={loadingBranches}
+        onSelectStore={handleSelectBranch}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-brand-bg text-neutral-900 font-sans select-none">
       {/* ── HEADER NAVIGATION ── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
-        {/* Brand Logo */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-brand-primary rounded-xl flex items-center justify-center text-white shadow-md shadow-brand-primary/25 flex-shrink-0 animate-fade-in">
-            <ChefHat size={18} strokeWidth={2.5} />
+        {/* Brand Logo & Change Restaurant Trigger */}
+        <div className="flex items-center gap-3">
+          <div
+            onClick={handleSwitchStoreClick}
+            className="flex items-center gap-2.5 cursor-pointer group"
+          >
+            <div className="w-9 h-9 bg-brand-primary group-hover:bg-brand-primary-hover rounded-xl flex items-center justify-center text-white shadow-md shadow-brand-primary/25 flex-shrink-0 transition-all">
+              <ChefHat size={18} strokeWidth={2.5} />
+            </div>
+            <div className="flex flex-col leading-none">
+              <span className="font-display font-medium text-[15px] text-neutral-800 tracking-tight">
+                Chicken
+              </span>
+              <span className="font-display font-medium text-[10px] text-brand-primary tracking-[0.2em] mt-0.5">
+                DELIGHT
+              </span>
+            </div>
           </div>
-          <div className="flex flex-col leading-none">
-            <span className="font-display font-medium text-[15px] text-neutral-800 tracking-tight">
-              Chicken
-            </span>
-            <span className="font-display font-medium text-[10px] text-brand-primary tracking-[0.2em] mt-0.5">
-              DELIGHT
-            </span>
-          </div>
+
+          <button
+            type="button"
+            onClick={handleSwitchStoreClick}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-full text-[11px] font-bold transition-all cursor-pointer border border-neutral-200"
+          >
+            <MapPin size={12} className="text-brand-primary" />
+            <span>Switch Store</span>
+          </button>
         </div>
 
         {/* Order Mode & Address Banner */}
@@ -322,7 +425,11 @@ export default function HomePage() {
           >
             <MapPin size={12} className="text-brand-primary flex-shrink-0" />
             <span className="truncate">
-              {orderType === "delivery" ? (address ? address : "Set Delivery Address") : "Strathmore Branch Counter"}
+              {orderType === "delivery"
+                ? address
+                  ? address
+                  : "Set Delivery Address"
+                : "Strathmore Branch Counter"}
             </span>
           </button>
         </div>
@@ -347,31 +454,49 @@ export default function HomePage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
-                Open Now
+              <span
+                className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border ${
+                  selectedBranch.isActive
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                    : "bg-red-50 text-red-600 border-red-100"
+                }`}
+              >
+                {selectedBranch.isActive ? "Open Now" : "Closed"}
               </span>
               <span className="text-[10px] text-neutral-400 font-medium">
                 ·
               </span>
               <span className="text-[10px] text-neutral-500 font-semibold">
-                11:00 AM - 10:00 PM
+                {selectedBranch.openingHours || "11:00 AM - 10:00 PM"}
               </span>
+              <span className="text-[10px] text-neutral-400 font-medium">
+                ·
+              </span>
+              <button
+                type="button"
+                onClick={handleSwitchStoreClick}
+                className="text-[10px] text-brand-primary font-bold hover:underline cursor-pointer"
+              >
+                Change Restaurant
+              </button>
             </div>
             <h2 className="text-base font-black text-neutral-900 mt-1 leading-tight">
-              Chicken Delight - Downtown Main
+              {selectedBranch.name}
             </h2>
             <p className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1 font-medium">
               <MapPin size={11} className="text-neutral-400" />
-              231 Edgefield Pl, Downtown Main, AB, T1P 0E8
+              {selectedBranch.address || "Main City Location"}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4 sm:gap-6 border-t md:border-t-0 border-neutral-100 pt-3 md:pt-0 text-[11px] text-neutral-600 font-semibold">
-          <div className="flex items-center gap-1.5">
-            <Phone size={13} className="text-brand-primary" />
-            <span>(587) 365-5401</span>
-          </div>
+          {selectedBranch.phone && (
+            <div className="flex items-center gap-1.5">
+              <Phone size={13} className="text-brand-primary" />
+              <span>{selectedBranch.phone}</span>
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <Clock size={13} className="text-brand-primary" />
             <span>Delivery: 30-45 mins</span>
@@ -518,7 +643,9 @@ export default function HomePage() {
                     {/* Food Info */}
                     <div className="flex-1 flex flex-col justify-between gap-1.5 sm:gap-3 min-w-0">
                       <div>
-                        <h3 className={`text-xs sm:text-[13px] font-extrabold leading-snug truncate sm:whitespace-normal ${isOutOfStock ? "text-neutral-450" : "text-neutral-800 group-hover:text-brand-primary transition-colors"}`}>
+                        <h3
+                          className={`text-xs sm:text-[13px] font-extrabold leading-snug truncate sm:whitespace-normal ${isOutOfStock ? "text-neutral-450" : "text-neutral-800 group-hover:text-brand-primary transition-colors"}`}
+                        >
                           {item.name}
                         </h3>
                         <p className="text-[9.5px] sm:text-[10px] text-neutral-400 font-medium leading-relaxed mt-1 sm:mt-1.5 line-clamp-2">
@@ -532,12 +659,16 @@ export default function HomePage() {
                           <p className="text-[8.5px] sm:text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
                             Price
                           </p>
-                          <p className={`text-[12px] sm:text-[14px] font-black ${isOutOfStock ? "text-neutral-400" : "text-neutral-800"}`}>
+                          <p
+                            className={`text-[12px] sm:text-[14px] font-black ${isOutOfStock ? "text-neutral-400" : "text-neutral-800"}`}
+                          >
                             ${item.price.toFixed(2)}
                           </p>
                         </div>
                         <button
-                          onClick={() => !isOutOfStock && handleOpenModifiers(item)}
+                          onClick={() =>
+                            !isOutOfStock && handleOpenModifiers(item)
+                          }
                           disabled={isOutOfStock}
                           className={`px-2.5 py-1.5 sm:p-2.5 rounded-lg sm:rounded-xl shadow-md transition-all flex items-center justify-center gap-1 font-bold text-[10px] sm:text-xs ${
                             isOutOfStock
@@ -597,7 +728,9 @@ export default function HomePage() {
           </div>
 
           {/* Cart items scrollbox */}
-          <div className={`flex-1 overflow-y-auto min-h-0 py-3 divide-y divide-neutral-100 max-h-[40vh] no-scrollbar pr-0.5 ${cartItems.length === 0 ? 'flex flex-col justify-center' : ''}`}>
+          <div
+            className={`flex-1 overflow-y-auto min-h-0 py-3 divide-y divide-neutral-100 max-h-[40vh] no-scrollbar pr-0.5 ${cartItems.length === 0 ? "flex flex-col justify-center" : ""}`}
+          >
             {cartItems.length > 0 ? (
               cartItems.map((cartItem) => (
                 <div key={cartItem.id} className="py-3 flex flex-col gap-1.5">
@@ -736,7 +869,9 @@ export default function HomePage() {
             </div>
 
             {/* Cart Items Scroll */}
-            <div className={`flex-1 overflow-y-auto py-3 divide-y divide-neutral-100 no-scrollbar ${cartItems.length === 0 ? 'flex flex-col justify-center' : ''}`}>
+            <div
+              className={`flex-1 overflow-y-auto py-3 divide-y divide-neutral-100 no-scrollbar ${cartItems.length === 0 ? "flex flex-col justify-center" : ""}`}
+            >
               {cartItems.length > 0 ? (
                 cartItems.map((cartItem) => (
                   <div key={cartItem.id} className="py-3 flex flex-col gap-1.5">
@@ -971,28 +1106,33 @@ export default function HomePage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[9px] font-black text-brand-primary uppercase tracking-widest leading-none">
-                  {activeOrder.status === 'pending' && 'Order Placed'}
-                  {activeOrder.status === 'preparing' && 'Preparing'}
-                  {activeOrder.status === 'ready' && 'Out for Delivery'}
-                  {activeOrder.status === 'completed' && 'Delivered'}
-                  {activeOrder.status === 'cancelled' && 'Cancelled'}
+                  {activeOrder.status === "pending" && "Order Placed"}
+                  {activeOrder.status === "preparing" && "Preparing"}
+                  {activeOrder.status === "ready" && "Out for Delivery"}
+                  {activeOrder.status === "completed" && "Delivered"}
+                  {activeOrder.status === "cancelled" && "Cancelled"}
                 </span>
               </div>
               <h4 className="text-[13px] font-black text-neutral-800 truncate mt-1 leading-snug">
-                {activeOrder.items?.[0]?.name || 'Your Order'}
-                {activeOrder.items?.length > 1 ? ` + ${activeOrder.items.length - 1} items` : ''}
+                {activeOrder.items?.[0]?.name || "Your Order"}
+                {activeOrder.items?.length > 1
+                  ? ` + ${activeOrder.items.length - 1} items`
+                  : ""}
               </h4>
               <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed truncate">
-                {activeOrder.status === 'pending' && 'Waiting for branch confirmation'}
-                {activeOrder.status === 'preparing' && 'Kitchen is cooking your meal'}
-                {activeOrder.status === 'ready' && 'Driver is en route to you!'}
-                {activeOrder.status === 'completed' && 'Enjoy your hot meal!'}
+                {activeOrder.status === "pending" &&
+                  "Waiting for branch confirmation"}
+                {activeOrder.status === "preparing" &&
+                  "Kitchen is cooking your meal"}
+                {activeOrder.status === "ready" && "Driver is en route to you!"}
+                {activeOrder.status === "completed" && "Enjoy your hot meal!"}
               </p>
             </div>
           </div>
 
           {/* Right Action */}
-          {activeOrder.orderType === 'delivery' && activeOrder.status === 'ready' ? (
+          {activeOrder.orderType === "delivery" &&
+          activeOrder.status === "ready" ? (
             <button
               onClick={() => {
                 setAutoOpenMap(true);
