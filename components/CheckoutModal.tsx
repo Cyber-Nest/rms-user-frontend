@@ -14,6 +14,7 @@ import {
   ShoppingBag,
   Locate,
   Truck,
+  Heart,
 } from "lucide-react";
 import { CartItem } from "../types";
 import toast from "react-hot-toast";
@@ -30,23 +31,23 @@ import { isBranchCurrentlyOpen, generateValidTimeSlotsForBranch } from "../lib/s
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
-    "pk_test_TYooMQauvdEDq54NiTphI7jx",
+    "pk_test_51PxxxxxxxxxYOUR_TEST_KEYxxxxxxxx",
 );
 
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  selectedBranch?: any;
+  selectedBranch: any;
   cartItems: CartItem[];
-  orderType: "takeout" | "delivery";
-  setOrderType: (type: "takeout" | "delivery") => void;
+  orderType: "delivery" | "takeout";
+  setOrderType: (type: "delivery" | "takeout") => void;
   address: string;
-  setAddress: (address: string) => void;
+  setAddress: (addr: string) => void;
   subtotal: number;
   tax: number;
   deliveryFee: number;
   total: number;
-  onSubmit: (orderData: any) => void;
+  onSubmit: (orderPayload: any) => Promise<void>;
   isSubmitting?: boolean;
 }
 
@@ -82,6 +83,22 @@ function CheckoutModalInner({
   const [addressInput, setAddressInput] = useState(address);
   const [notes, setNotes] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Tip state ($0, $1, $3, $5, $10, custom)
+  const [tipOption, setTipOption] = useState<"0" | "1" | "3" | "5" | "10" | "custom">("3");
+  const [customTipInput, setCustomTipInput] = useState("");
+
+  const tipAmount = useMemo(() => {
+    if (tipOption === "custom") {
+      const parsed = parseFloat(customTipInput);
+      return isNaN(parsed) || parsed < 0 ? 0 : Math.round(parsed * 100) / 100;
+    }
+    return parseFloat(tipOption) || 0;
+  }, [tipOption, customTipInput]);
+
+  const finalTotal = useMemo(() => {
+    return Math.round(((subtotal || 0) + (tax || 0) + (orderType === "delivery" ? (deliveryFee || 0) : 0) + tipAmount) * 100) / 100;
+  }, [subtotal, tax, orderType, deliveryFee, tipAmount]);
 
   const getTodayLocalString = () => {
     const d = new Date();
@@ -311,7 +328,7 @@ function CheckoutModalInner({
         const response = await axios.post(
           `${apiUrl}/payments/create-payment-intent`,
           {
-            amount: total,
+            amount: finalTotal,
           },
         );
 
@@ -383,7 +400,8 @@ function CheckoutModalInner({
       tax: tax,
       taxRate: 0.05,
       deliveryFee: orderType === "delivery" ? deliveryFee : 0,
-      total: total,
+      tip: tipAmount,
+      total: finalTotal,
       paymentTiming: paymentMethod === "stripe" ? "pay-now" : "pay-later", // Stripe is paid immediately
       paymentType: "one-time",
       paymentStatus: paymentStatus,
@@ -782,6 +800,70 @@ function CheckoutModalInner({
             </div>
           </div>
 
+          {/* TIP SELECTION SECTION */}
+          <div className="space-y-3 pt-3 border-t border-neutral-100">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Heart size={13} className="text-brand-primary fill-brand-primary/20" />
+                <span>Add Tip for Driver</span>
+              </label>
+              {tipAmount > 0 && (
+                <span className="text-xs font-black text-brand-primary">
+                  +${tipAmount.toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-5 gap-1.5">
+              {[
+                { label: "No Tip", value: "0" },
+                { label: "$1", value: "1" },
+                { label: "$3", value: "3" },
+                { label: "$5", value: "5" },
+                { label: "$10", value: "10" },
+              ].map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  onClick={() => {
+                    setTipOption(preset.value as any);
+                    setCustomTipInput("");
+                  }}
+                  className={`py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer ${
+                    tipOption === preset.value
+                      ? "bg-brand-primary text-white border-brand-primary shadow-sm shadow-brand-primary/20 scale-[1.02]"
+                      : "bg-neutral-50 hover:bg-neutral-100 text-neutral-700 border-neutral-200/80"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Tip Input */}
+            {/* <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-400">
+                Custom Tip ($):
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.50"
+                placeholder="e.g. 7.50"
+                value={customTipInput}
+                onChange={(e) => {
+                  setCustomTipInput(e.target.value);
+                  setTipOption("custom");
+                }}
+                className={`w-full pl-32 pr-4 py-2 bg-neutral-50/80 border rounded-xl text-xs font-bold text-neutral-800 focus:outline-none focus:bg-white transition-all ${
+                  tipOption === "custom"
+                    ? "border-brand-primary ring-2 ring-brand-primary/10"
+                    : "border-neutral-200"
+                }`}
+              />
+            </div> */}
+          </div>
+
           {/* Notes */}
           <div className="space-y-1.5">
             <label className="block text-[9px] font-bold text-neutral-400 uppercase tracking-wider">
@@ -818,10 +900,16 @@ function CheckoutModalInner({
               <span>GST (5%)</span>
               <span>${tax.toFixed(2)}</span>
             </div>
+            {tipAmount > 0 && (
+              <div className="flex justify-between text-[10px] text-brand-primary font-bold">
+                <span>Tip (Staff & Driver)</span>
+                <span>+${tipAmount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-xs font-black text-neutral-800 border-t border-neutral-200/70 pt-2">
               <span>Total Amount</span>
               <span className="text-sm text-brand-primary">
-                ${total.toFixed(2)}
+                ${finalTotal.toFixed(2)}
               </span>
             </div>
           </div>
@@ -834,7 +922,7 @@ function CheckoutModalInner({
               Total Order Price
             </p>
             <p className="text-[14px] font-black text-neutral-800">
-              ${total.toFixed(2)}
+              ${finalTotal.toFixed(2)}
             </p>
           </div>
 

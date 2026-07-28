@@ -616,6 +616,14 @@ export default function OrderStatusModal({
                     </span>
                   </div>
                 )}
+                {((liveOrder.tip as number | undefined) ?? 0) > 0 && (
+                  <div className="flex justify-between text-brand-primary">
+                    <span>Staff & Driver Tip</span>
+                    <span className="font-mono">
+                      +${(liveOrder.tip as number).toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-neutral-200 pt-3 flex justify-between items-center text-xs font-black text-neutral-800">
