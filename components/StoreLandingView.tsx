@@ -14,6 +14,8 @@ import {
   Info,
 } from "lucide-react";
 
+import { isBranchCurrentlyOpen } from "../lib/storeTimingUtils";
+
 export interface BranchStore {
   _id: string;
   name: string;
@@ -24,6 +26,7 @@ export interface BranchStore {
   openingHours?: string;
   isActive: boolean;
   qrCodePayload?: string;
+  settings?: any;
 }
 
 interface StoreLandingViewProps {
@@ -173,7 +176,9 @@ export default function StoreLandingView({
         ) : filteredBranches.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredBranches.map((branch, index) => {
-              const isOpen = branch.isActive;
+              const statusInfo = isBranchCurrentlyOpen(branch);
+              const isEmergencyClosed = !!branch.settings?.mainSettings?.isEmergencyClosed;
+              const isDisabled = isEmergencyClosed;
               const facadeImages = [
                 "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80",
                 "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=80",
@@ -199,17 +204,17 @@ export default function StoreLandingView({
                     <div className="absolute top-3 left-3">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider backdrop-blur-md shadow-sm border ${
-                          isOpen
+                          statusInfo.isOpen
                             ? "bg-emerald-50/90 text-emerald-700 border-emerald-200"
                             : "bg-red-50/90 text-red-700 border-red-200"
                         }`}
                       >
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${
-                            isOpen ? "bg-emerald-500 animate-pulse" : "bg-red-500"
+                            statusInfo.isOpen ? "bg-emerald-500 animate-pulse" : "bg-red-500"
                           }`}
                         />
-                        {isOpen ? "Open Now" : "Closed"}
+                        {statusInfo.reason}
                       </span>
                     </div>
 
@@ -239,33 +244,26 @@ export default function StoreLandingView({
                           </p>
                         )}
 
-                        <p className="flex items-center gap-1.5 text-[10.5px] text-neutral-500">
-                          <Clock size={12} className="text-neutral-400 shrink-0" />
-                          <span>{branch.openingHours || "11:00 AM - 10:00 PM"}</span>
+                        <p className="flex items-center gap-1.5 text-[10.5px] text-neutral-500 font-semibold">
+                          <Clock size={12} className="text-brand-primary shrink-0" />
+                          <span>Today: {statusInfo.scheduleText}</span>
                         </p>
                       </div>
                     </div>
 
-                    {/* Quick Specs */}
-                    {/* <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-neutral-100 text-[10.5px]">
-                      <div className="bg-neutral-50 p-2 rounded-xl border border-neutral-200/50 text-center">
-                        <span className="text-neutral-400 block text-[8.5px] uppercase font-bold tracking-wider">Est. Delivery</span>
-                        <span className="text-neutral-800 font-bold">30 - 45 mins</span>
-                      </div>
-                      <div className="bg-neutral-50 p-2 rounded-xl border border-neutral-200/50 text-center">
-                        <span className="text-neutral-400 block text-[8.5px] uppercase font-bold tracking-wider">Min. Order</span>
-                        <span className="text-neutral-800 font-bold">$15.00</span>
-                      </div>
-                    </div> */}
-
                     {/* Action Button */}
                     <button
                       type="button"
-                      onClick={() => onSelectStore(branch)}
-                      className="w-full py-2.5 px-4 bg-brand-primary hover:bg-brand-primary-hover text-white rounded-xl text-xs font-bold shadow-md shadow-brand-primary/10 transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
+                      disabled={isDisabled}
+                      onClick={() => !isDisabled && onSelectStore(branch)}
+                      className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                        isDisabled
+                          ? "bg-neutral-100 border border-neutral-200 text-neutral-400 cursor-not-allowed shadow-none"
+                          : "bg-brand-primary hover:bg-brand-primary-hover text-white shadow-md shadow-brand-primary/10 active:scale-[0.98] cursor-pointer"
+                      }`}
                     >
-                      <span>ORDER ONLINE</span>
-                      <ArrowRight size={13} strokeWidth={2.5} />
+                      <span>{isDisabled ? "CLOSED TODAY" : "ORDER ONLINE"}</span>
+                      {!isDisabled && <ArrowRight size={13} strokeWidth={2.5} />}
                     </button>
                   </div>
                 </div>

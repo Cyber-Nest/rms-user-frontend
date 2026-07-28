@@ -23,6 +23,7 @@ interface OrderStatusModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: any; // Order payload/document
+  selectedBranch?: any;
   onDismiss: () => void;
   autoOpenMap?: boolean;
 }
@@ -38,6 +39,7 @@ export default function OrderStatusModal({
   isOpen,
   onClose,
   order,
+  selectedBranch,
   onDismiss,
   autoOpenMap = false,
 }: OrderStatusModalProps) {
@@ -262,6 +264,26 @@ export default function OrderStatusModal({
 
   const isDelivery = liveOrder.orderType === "delivery";
 
+  const branchName =
+    selectedBranch?.name ||
+    (typeof liveOrder.branchId === "object" ? liveOrder.branchId?.name : null) ||
+    liveOrder.branchName ||
+    "Restaurant Branch";
+
+  const branchAddress =
+    selectedBranch?.address ||
+    (typeof liveOrder.branchId === "object" ? liveOrder.branchId?.address : null) ||
+    liveOrder.branchAddress ||
+    "Main City Location";
+
+  const branchPhone =
+    selectedBranch?.phone ||
+    (typeof liveOrder.branchId === "object" ? liveOrder.branchId?.phone : null) ||
+    liveOrder.branchPhone ||
+    "(587) 365-5401";
+
+  const cleanPhoneTel = branchPhone.replace(/\D/g, "") || "5873655401";
+
   // Helper for tracking steps
   const steps = [
     {
@@ -283,7 +305,7 @@ export default function OrderStatusModal({
       label: isDelivery ? "Out for Delivery" : "Ready for Pickup",
       description: isDelivery
         ? "Estimated arrival: ~1 hour"
-        : "Pickup at Strathmore counter",
+        : `Pickup at ${branchName} counter`,
       icon: isDelivery ? MapPin : Store,
       color: "text-blue-500 bg-blue-50 border-blue-200",
     },
@@ -433,7 +455,7 @@ export default function OrderStatusModal({
               <div className="min-w-0">
                 <p className="text-xs font-bold">This order was cancelled</p>
                 <p className="text-[10px] opacity-90 mt-0.5">
-                  Please contact the branch at (587) 365-5401 for assistance.
+                  Please contact the branch at {branchPhone} for assistance.
                 </p>
               </div>
             </div>
@@ -631,10 +653,10 @@ export default function OrderStatusModal({
               ) : (
                 <div className="text-[10px] text-neutral-700 font-semibold space-y-0.5">
                   <p className="text-brand-primary font-bold">
-                    Strathmore Branch Counter
+                    {branchName} Counter
                   </p>
                   <p className="text-neutral-500 leading-tight">
-                    231 Edgefield Pl, Strathmore, AB
+                    {branchAddress}
                   </p>
                 </div>
               )}
@@ -654,13 +676,16 @@ export default function OrderStatusModal({
         </div>
 
         {/* Footer Support Info */}
-        <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-500 font-semibold flex-shrink-0">
-          <span>Need help with your order?</span>
+        <div className="px-6 py-3.5 bg-neutral-50 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-500 font-semibold flex-shrink-0">
+          <div>
+            <span className="text-neutral-700 font-bold block">Need help with your order?</span>
+            <span className="text-[9.5px] text-neutral-400 font-medium leading-tight">{branchName} · {branchAddress}</span>
+          </div>
           <a
-            href="tel:5873655401"
-            className="flex items-center gap-1 text-brand-primary hover:underline font-bold"
+            href={`tel:${cleanPhoneTel}`}
+            className="flex items-center gap-1.5 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary px-3.5 py-1.5 rounded-xl transition-all font-extrabold cursor-pointer text-xs shrink-0"
           >
-            <Phone size={11} />
+            <Phone size={13} />
             <span>Call Branch</span>
           </a>
         </div>

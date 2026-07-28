@@ -25,6 +25,7 @@ import ModifierModal from "../components/ModifierModal";
 import CheckoutModal from "../components/CheckoutModal";
 import OrderStatusModal from "../components/OrderStatusModal";
 import { fallbackCategories, fallbackMenuItems } from "../data/menuData";
+import { isBranchCurrentlyOpen } from "../lib/storeTimingUtils";
 
 import StoreLandingView, { BranchStore } from "../components/StoreLandingView";
 
@@ -453,22 +454,29 @@ export default function HomePage() {
             />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span
-                className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border ${
-                  selectedBranch.isActive
-                    ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                    : "bg-red-50 text-red-600 border-red-100"
-                }`}
-              >
-                {selectedBranch.isActive ? "Open Now" : "Closed"}
-              </span>
-              <span className="text-[10px] text-neutral-400 font-medium">
-                ·
-              </span>
-              <span className="text-[10px] text-neutral-500 font-semibold">
-                {selectedBranch.openingHours || "11:00 AM - 10:00 PM"}
-              </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {(() => {
+                const statusInfo = isBranchCurrentlyOpen(selectedBranch);
+                return (
+                  <>
+                    <span
+                      className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider border ${
+                        statusInfo.isOpen
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                          : "bg-red-50 text-red-600 border-red-100"
+                      }`}
+                    >
+                      {statusInfo.reason}
+                    </span>
+                    <span className="text-[10px] text-neutral-400 font-medium">
+                      ·
+                    </span>
+                    <span className="text-[10px] text-neutral-500 font-semibold">
+                      Today: {statusInfo.scheduleText}
+                    </span>
+                  </>
+                );
+              })()}
               <span className="text-[10px] text-neutral-400 font-medium">
                 ·
               </span>
@@ -1161,6 +1169,7 @@ export default function HomePage() {
       <CheckoutModal
         isOpen={showCheckoutModal}
         onClose={() => setShowCheckoutModal(false)}
+        selectedBranch={selectedBranch}
         cartItems={cartItems}
         orderType={orderType}
         setOrderType={setOrderType}
@@ -1180,6 +1189,7 @@ export default function HomePage() {
           isOpen={showStatusModal}
           onClose={() => setShowStatusModal(false)}
           order={activeOrder}
+          selectedBranch={selectedBranch}
           onDismiss={handleDismissActiveOrder}
           autoOpenMap={autoOpenMap}
         />

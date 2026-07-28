@@ -19,22 +19,6 @@ import { CartItem } from "../types";
 import toast from "react-hot-toast";
 import axios from "axios";
 
-interface CheckoutModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  cartItems: CartItem[];
-  orderType: "takeout" | "delivery";
-  setOrderType: (type: "takeout" | "delivery") => void;
-  address: string;
-  setAddress: (address: string) => void;
-  subtotal: number;
-  tax: number;
-  deliveryFee: number;
-  total: number;
-  onSubmit: (orderData: any) => void;
-  isSubmitting?: boolean;
-}
-
 import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -42,6 +26,7 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
+import { isBranchCurrentlyOpen, generateValidTimeSlotsForBranch } from "../lib/storeTimingUtils";
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
@@ -51,6 +36,7 @@ const stripePromise = loadStripe(
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
+  selectedBranch?: any;
   cartItems: CartItem[];
   orderType: "takeout" | "delivery";
   setOrderType: (type: "takeout" | "delivery") => void;
@@ -76,6 +62,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
 function CheckoutModalInner({
   isOpen,
   onClose,
+  selectedBranch,
   cartItems,
   orderType,
   setOrderType,
@@ -102,12 +89,24 @@ function CheckoutModalInner({
     return new Date(d.getTime() - tzOffset).toISOString().split("T")[0];
   };
 
+  // Evaluate real-time store timing status
+  const branchStatus = useMemo(() => {
+    return isBranchCurrentlyOpen(selectedBranch);
+  }, [selectedBranch]);
+
   // Timing states
   const [timingMode, setTimingMode] = useState<"now" | "later">("now");
   const [selectedDate, setSelectedDate] = useState<string>(
     getTodayLocalString(),
   );
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
+
+  // Force timingMode to 'later' if store is currently closed/unopened
+  useEffect(() => {
+    if (!branchStatus.isOpen) {
+      setTimingMode("later");
+    }
+  }, [branchStatus.isOpen]);
 
   // Payment states
   const [paymentMethod, setPaymentMethod] = useState<
@@ -158,7 +157,6 @@ function CheckoutModalInner({
         const { latitude, longitude } = position.coords;
         setCoords({ lat: latitude, lng: longitude });
         try {
-          // OpenStreetMap Nominatim reverse geocoding API
           const response = await axios.get(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
             {
@@ -221,56 +219,10 @@ function CheckoutModalInner({
     };
   }, [isOpen]);
 
-  // Generate 15-minute time slots between 11:00 AM and 10:00 PM based on selected date
+  // Generate 15-minute time slots dynamically based on branch operating hours
   const timeSlots = useMemo(() => {
-    const slots: string[] = [];
-    const todayStr = getTodayLocalString();
-
-    let startTime = new Date();
-    if (selectedDate === todayStr) {
-      // Start generating slots 30 minutes from now
-      startTime = new Date(startTime.getTime() + 30 * 60 * 1000);
-
-      // Round minutes up to the next 15-minute boundary (e.g. :00, :15, :30, :45)
-      const minutes = startTime.getMinutes();
-      const roundedMinutes = Math.ceil(minutes / 15) * 15;
-      if (roundedMinutes === 60) {
-        startTime.setHours(startTime.getHours() + 1);
-        startTime.setMinutes(0);
-      } else {
-        startTime.setMinutes(roundedMinutes);
-      }
-      startTime.setSeconds(0, 0);
-
-      // Clamp start hour to operational hours
-      if (startTime.getHours() < 11) {
-        startTime.setHours(11, 0, 0, 0);
-      }
-    } else {
-      // Future date: slots start at 11:00 AM sharp
-      startTime.setHours(11, 0, 0, 0);
-    }
-
-    const endTime = new Date();
-    endTime.setHours(22, 0, 0, 0); // 10:00 PM close
-
-    while (startTime < endTime) {
-      const hours = startTime.getHours();
-      const currentMins = startTime.getMinutes();
-      const ampm = hours >= 12 ? "PM" : "AM";
-      const formattedHours = hours % 12 === 0 ? 12 : hours % 12;
-      const formattedMinutes =
-        currentMins < 10 ? `0${currentMins}` : currentMins;
-
-      const timeStr = `${formattedHours}:${formattedMinutes} ${ampm}`;
-      slots.push(timeStr);
-
-      // Add 15 minutes
-      startTime.setMinutes(startTime.getMinutes() + 15);
-    }
-
-    return slots;
-  }, [selectedDate]);
+    return generateValidTimeSlotsForBranch(selectedBranch, selectedDate);
+  }, [selectedBranch, selectedDate]);
 
   // Select first slot by default when timeSlots change
   useEffect(() => {
@@ -676,20 +628,33 @@ function CheckoutModalInner({
               Timing Preferences
             </h4>
 
+            {!branchStatus.isOpen && (
+              <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-amber-800 text-[11px] font-medium leading-relaxed">
+                <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block text-amber-900">ASAP Ordering Unavailable</span>
+                  <span>{branchStatus.reason}. Immediate (ASAP) order is disabled. Please select a valid time slot below to schedule your order.</span>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setTimingMode("now")}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                  timingMode === "now"
-                    ? "border-brand-primary bg-orange-50/20 ring-1 ring-brand-primary"
-                    : "border-neutral-200 bg-white hover:bg-neutral-50"
+                disabled={!branchStatus.isOpen}
+                onClick={() => branchStatus.isOpen && setTimingMode("now")}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                  !branchStatus.isOpen
+                    ? "opacity-40 bg-neutral-100 border-neutral-200 cursor-not-allowed"
+                    : timingMode === "now"
+                    ? "border-brand-primary bg-orange-50/20 ring-1 ring-brand-primary cursor-pointer"
+                    : "border-neutral-200 bg-white hover:bg-neutral-50 cursor-pointer"
                 }`}
               >
                 <Clock
                   size={15}
                   className={
-                    timingMode === "now"
+                    timingMode === "now" && branchStatus.isOpen
                       ? "text-brand-primary"
                       : "text-neutral-400"
                   }
