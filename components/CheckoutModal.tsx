@@ -17,6 +17,7 @@ import {
   Heart,
 } from "lucide-react";
 import { CartItem } from "../types";
+import { useCart } from "../context/CartContext";
 import toast from "react-hot-toast";
 import axios from "axios";
 
@@ -76,6 +77,7 @@ function CheckoutModalInner({
   onSubmit,
   isSubmitting = false,
 }: CheckoutModalProps) {
+  const { branchTaxRate } = useCart();
   // Customer details
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -398,7 +400,7 @@ function CheckoutModalInner({
       })),
       subtotal: subtotal,
       tax: tax,
-      taxRate: 0.05,
+      taxRate: (branchTaxRate || 5) / 100,
       deliveryFee: orderType === "delivery" ? deliveryFee : 0,
       tip: tipAmount,
       total: finalTotal,
@@ -897,12 +899,12 @@ function CheckoutModalInner({
               </div>
             )}
             <div className="flex justify-between text-[10px] text-neutral-500 font-semibold">
-              <span>GST (5%)</span>
+              <span>GST ({branchTaxRate}%)</span>
               <span>${tax.toFixed(2)}</span>
             </div>
             {tipAmount > 0 && (
               <div className="flex justify-between text-[10px] text-brand-primary font-bold">
-                <span>Tip (Staff & Driver)</span>
+                <span>Tip (Driver)</span>
                 <span>+${tipAmount.toFixed(2)}</span>
               </div>
             )}

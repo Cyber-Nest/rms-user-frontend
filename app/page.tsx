@@ -47,6 +47,9 @@ export default function HomePage() {
     isCartOpen,
     setIsCartOpen,
     addToCart,
+    setBranchDeliveryFee,
+    branchTaxRate,
+    setBranchTaxRate,
   } = useCart();
 
   // Multi-Restaurant Branch States
@@ -75,6 +78,22 @@ export default function HomePage() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [autoOpenMap, setAutoOpenMap] = useState(false);
 
+  const applyBranchSettings = (branch: BranchStore) => {
+    const taxFees = branch.settings?.taxFeesSettings;
+    if (taxFees) {
+      if (taxFees.deliveryFee !== undefined) {
+        setBranchDeliveryFee(Number(taxFees.deliveryFee) || 0);
+      }
+      const totalTaxRate =
+        (Number(taxFees.gstTaxRate) || 0) +
+        (Number(taxFees.pstTaxRate) || 0) +
+        (Number(taxFees.hstTaxRate) || 0);
+      if (totalTaxRate > 0) {
+        setBranchTaxRate(totalTaxRate);
+      }
+    }
+  };
+
   // Load public branches and restore selected branch on mount
   useEffect(() => {
     async function loadPublicBranches() {
@@ -96,6 +115,7 @@ export default function HomePage() {
               );
               if (matched) {
                 setSelectedBranch(matched);
+                applyBranchSettings(matched);
               }
             } catch (e) {}
           }
@@ -153,6 +173,7 @@ export default function HomePage() {
     }
     setSelectedBranch(branch);
     localStorage.setItem("cd_user_branch", JSON.stringify(branch));
+    applyBranchSettings(branch);
   };
 
   const handleSwitchStoreClick = () => {
@@ -832,7 +853,7 @@ export default function HomePage() {
                 </div>
               )}
               <div className="flex justify-between text-[11px] text-neutral-500 font-semibold">
-                <span>GST (5%)</span>
+                <span>GST ({branchTaxRate}%)</span>
                 <span>${tax.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs font-black text-neutral-800 border-t border-neutral-100 pt-2 flex-shrink-0">
@@ -971,7 +992,7 @@ export default function HomePage() {
                   </div>
                 )}
                 <div className="flex justify-between text-[11px] text-neutral-500 font-semibold">
-                  <span>GST (5%)</span>
+                  <span>GST ({branchTaxRate}%)</span>
                   <span>${tax.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-xs font-black text-neutral-800 border-t border-neutral-100 pt-2">

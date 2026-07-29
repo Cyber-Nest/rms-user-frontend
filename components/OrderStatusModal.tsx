@@ -602,12 +602,21 @@ export default function OrderStatusModal({
                     ${(liveOrder.subtotal ?? 0).toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>GST (5%)</span>
-                  <span className="text-neutral-700 font-mono">
-                    ${(liveOrder.tax ?? 0).toFixed(2)}
-                  </span>
-                </div>
+                {(() => {
+                  const taxRatePercentage = liveOrder.taxRate
+                    ? Math.round(liveOrder.taxRate * 100)
+                    : liveOrder.subtotal > 0 && liveOrder.tax
+                    ? Math.round((liveOrder.tax / liveOrder.subtotal) * 100)
+                    : 5;
+                  return (
+                    <div className="flex justify-between">
+                      <span>GST ({taxRatePercentage}%)</span>
+                      <span className="text-neutral-700 font-mono">
+                        ${(liveOrder.tax ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })()}
                 {((liveOrder.deliveryFee as number | undefined) ?? 0) > 0 && (
                   <div className="flex justify-between">
                     <span>Delivery Fee</span>
@@ -618,7 +627,7 @@ export default function OrderStatusModal({
                 )}
                 {((liveOrder.tip as number | undefined) ?? 0) > 0 && (
                   <div className="flex justify-between text-brand-primary">
-                    <span>Staff & Driver Tip</span>
+                    <span>Driver Tip</span>
                     <span className="font-mono">
                       +${(liveOrder.tip as number).toFixed(2)}
                     </span>

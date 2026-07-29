@@ -14,19 +14,20 @@ interface CartContextType {
   tax: number;
   deliveryFee: number;
   total: number;
+  branchDeliveryFee: number;
+  setBranchDeliveryFee: (fee: number) => void;
+  branchTaxRate: number;
+  setBranchTaxRate: (rate: number) => void;
   addToCart: (menuItem: MenuItem, selectedModifiers: SelectedModifier[], quantity?: number, note?: string) => void;
   removeFromCart: (cartItemId: string) => void;
   increaseQuantity: (cartItemId: string) => void;
   decreaseQuantity: (cartItemId: string) => void;
   clearCart: () => void;
   isCartOpen: boolean;
-  setIsCartOpen: (open: boolean) => void;
+  setIsCartOpen: (open: boolean) => boolean | void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
-
-const TAX_RATE = 0.05; // 5% GST
-const DELIVERY_FEE = 5.00; // Flat $5 delivery charge
 
 const roundToTwo = (num: number): number =>
   Math.round((num + Number.EPSILON) * 100) / 100;
@@ -47,6 +48,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [orderType, setOrderTypeState] = useState<'takeout' | 'delivery'>('takeout');
   const [address, setAddressState] = useState<string>('');
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [branchDeliveryFee, setBranchDeliveryFee] = useState<number>(0);
+  const [branchTaxRate, setBranchTaxRate] = useState<number>(5);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -192,8 +195,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const subtotal = roundToTwo(cartItems.reduce((sum, item) => sum + item.totalPrice, 0));
-  const deliveryFee = orderType === 'delivery' && subtotal > 0 ? DELIVERY_FEE : 0;
-  const tax = roundToTwo(subtotal * TAX_RATE);
+  const deliveryFee = orderType === 'delivery' && subtotal > 0 ? branchDeliveryFee : 0;
+  const tax = roundToTwo(subtotal * (branchTaxRate / 100));
   const total = roundToTwo(subtotal + deliveryFee + tax);
 
   return (
@@ -208,6 +211,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tax,
         deliveryFee,
         total,
+        branchDeliveryFee,
+        setBranchDeliveryFee,
+        branchTaxRate,
+        setBranchTaxRate,
         addToCart,
         removeFromCart,
         increaseQuantity,

@@ -10,6 +10,12 @@ export interface BranchStoreSettings {
     isEmergencyClosed?: boolean;
     timezone?: string;
   };
+  taxFeesSettings?: {
+    deliveryFee?: number;
+    gstTaxRate?: number;
+    pstTaxRate?: number;
+    hstTaxRate?: number;
+  };
   storeTimings?: StoreTiming[];
   storeTimingsUpdates?: any[];
   holidays?: any[];
