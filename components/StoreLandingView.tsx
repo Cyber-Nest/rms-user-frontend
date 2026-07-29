@@ -164,76 +164,65 @@ export default function StoreLandingView({
             {Array.from({ length: 6 }).map((_, idx) => (
               <div
                 key={idx}
-                className="bg-white border border-neutral-200/80 rounded-2xl p-4 space-y-4 animate-pulse"
+                className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-5 space-y-4 animate-pulse"
               >
-                <div className="h-40 bg-neutral-100 rounded-xl" />
+                <div className="flex justify-between items-center pb-3 border-b border-neutral-100">
+                  <div className="h-5 bg-neutral-100 w-20 rounded-full" />
+                  <div className="h-5 bg-neutral-100 w-16 rounded-md" />
+                </div>
                 <div className="h-4 bg-neutral-100 w-3/4 rounded-md" />
                 <div className="h-3 bg-neutral-100/70 w-full rounded-md" />
-                <div className="h-10 bg-neutral-100 rounded-xl" />
+                <div className="h-3 bg-neutral-100/70 w-2/3 rounded-md" />
+                <div className="h-10 bg-neutral-100 rounded-xl mt-2" />
               </div>
             ))}
           </div>
         ) : filteredBranches.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredBranches.map((branch, index) => {
+            {filteredBranches.map((branch) => {
               const statusInfo = isBranchCurrentlyOpen(branch);
               const isEmergencyClosed = !!branch.settings?.mainSettings?.isEmergencyClosed;
               const isDisabled = isEmergencyClosed;
-              const facadeImages = [
-                "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80",
-                "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&auto=format&fit=crop&q=80",
-                "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&auto=format&fit=crop&q=80",
-              ];
-              const cardImg = facadeImages[index % facadeImages.length];
 
               return (
                 <div
                   key={branch._id}
-                  className="group bg-white border border-neutral-200/80 hover:border-neutral-300 rounded-2xl overflow-hidden shadow-xs hover:shadow-lg transition-all duration-200 flex flex-col justify-between"
+                  className="group bg-white border border-neutral-200/80 hover:border-neutral-300 rounded-2xl overflow-hidden shadow-xs hover:shadow-lg transition-all duration-200 flex flex-col justify-between p-4 sm:p-5"
                 >
-                  {/* Top Image Banner */}
-                  <div className="relative h-40 w-full bg-neutral-100 overflow-hidden">
-                    <img
-                      src={cardImg}
-                      alt={branch.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-
+                  {/* Top Badges Header */}
+                  <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-neutral-100 mb-3.5">
                     {/* Status Badge */}
-                    <div className="absolute top-3 left-3">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                        statusInfo.isOpen
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-red-50 text-red-700 border-red-200"
+                      }`}
+                    >
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider backdrop-blur-md shadow-sm border ${
-                          statusInfo.isOpen
-                            ? "bg-emerald-50/90 text-emerald-700 border-emerald-200"
-                            : "bg-red-50/90 text-red-700 border-red-200"
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          statusInfo.isOpen ? "bg-emerald-500 animate-pulse" : "bg-red-500"
                         }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            statusInfo.isOpen ? "bg-emerald-500 animate-pulse" : "bg-red-500"
-                          }`}
-                        />
-                        {statusInfo.reason}
-                      </span>
-                    </div>
+                      />
+                      {statusInfo.reason}
+                    </span>
 
                     {/* Branch Code Badge */}
-                    <div className="absolute top-3 right-3 bg-neutral-900/80 backdrop-blur-md text-white text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-md">
+                    {/* <span className="bg-neutral-100 border border-neutral-200 text-neutral-700 text-[9.5px] font-mono font-bold px-2.5 py-1 rounded-lg">
                       CODE: {branch.code || "STORE"}
-                    </div>
+                    </span> */}
                   </div>
 
                   {/* Body Info */}
-                  <div className="p-4 flex-1 flex flex-col justify-between space-y-3.5">
+                  <div className="flex-1 flex flex-col justify-between space-y-4">
                     <div>
-                      <h3 className="text-sm font-black text-neutral-800 group-hover:text-brand-primary transition-colors leading-snug">
+                      <h3 className="text-sm sm:text-base font-black text-neutral-800 group-hover:text-brand-primary transition-colors leading-snug">
                         {branch.name}
                       </h3>
 
-                      <div className="mt-2 space-y-1.5 text-[11px] text-neutral-600 font-medium">
+                      <div className="mt-2.5 space-y-2 text-[11px] text-neutral-600 font-medium">
                         <p className="flex items-start gap-1.5 leading-relaxed">
-                          <MapPin size={13} className="text-brand-primary shrink-0 mt-0.5" />
+                          <MapPin size={14} className="text-brand-primary shrink-0 mt-0.5" />
                           <span>{branch.address || "Main City Center, AB"}</span>
                         </p>
 
@@ -245,7 +234,7 @@ export default function StoreLandingView({
                         )}
 
                         <p className="flex items-center gap-1.5 text-[10.5px] text-neutral-500 font-semibold">
-                          <Clock size={12} className="text-brand-primary shrink-0" />
+                          <Clock size={13} className="text-brand-primary shrink-0" />
                           <span>Today: {statusInfo.scheduleText}</span>
                         </p>
                       </div>
