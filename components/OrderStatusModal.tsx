@@ -50,6 +50,7 @@ export default function OrderStatusModal({
   const [driverInfo, setDriverInfo] = useState<any>(null);
   const [showFullScreenMap, setShowFullScreenMap] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [restaurantCoords, setRestaurantCoords] = useState<{lat: number, lng: number} | null>(null);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -59,6 +60,44 @@ export default function OrderStatusModal({
       );
     }
   }, []);
+
+  // Fetch restaurant branch GPS coordinates for map tracking
+  useEffect(() => {
+    const branchObj = selectedBranch || (typeof liveOrder?.branchId === "object" ? liveOrder.branchId : null);
+    if (branchObj?.settings?.mainSettings?.latitude && branchObj?.settings?.mainSettings?.longitude) {
+      const lat = Number(branchObj.settings.mainSettings.latitude);
+      const lng = Number(branchObj.settings.mainSettings.longitude);
+      if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+        setRestaurantCoords({ lat, lng });
+        return;
+      }
+    }
+    if (branchObj?.lat && branchObj?.lng) {
+      const lat = Number(branchObj.lat);
+      const lng = Number(branchObj.lng);
+      if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+        setRestaurantCoords({ lat, lng });
+        return;
+      }
+    }
+
+    const bId = branchObj?._id || branchObj?.id || (typeof liveOrder?.branchId === "string" ? liveOrder.branchId : null);
+    if (bId) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+      axios.get(`${apiUrl}/branches/settings`, { params: { branchId: bId } })
+        .then((res) => {
+          if (res.data.success && res.data.data?.mainSettings) {
+            const ms = res.data.data.mainSettings;
+            const lat = Number(ms.latitude);
+            const lng = Number(ms.longitude);
+            if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+              setRestaurantCoords({ lat, lng });
+            }
+          }
+        })
+        .catch((err) => console.warn("Could not fetch branch coords for OrderStatusModal:", err));
+    }
+  }, [selectedBranch, liveOrder?.branchId]);
 
   // Sync state with order prop
   useEffect(() => {
@@ -736,10 +775,10 @@ export default function OrderStatusModal({
               driverInfo={driverInfo.driver}
               customerCoords={
                 liveOrder.customer?.lat && liveOrder.customer?.lng
-                  ? { lat: liveOrder.customer.lat, lng: liveOrder.customer.lng }
-                  : userLocation || { lat: 22.1818, lng: 78.7618 }
+                  ? { lat: Number(liveOrder.customer.lat), lng: Number(liveOrder.customer.lng) }
+                  : userLocation || restaurantCoords || { lat: 22.1818, lng: 78.7618 }
               }
-              restaurantCoords={userLocation || { lat: 22.1818, lng: 78.7618 }}
+              restaurantCoords={restaurantCoords || { lat: 22.1818, lng: 78.7618 }}
               onDeliveryComplete={() => {
                 setCurrentStatus("completed");
                 setLiveOrder((prev: any) => ({ ...prev, status: "completed" }));
