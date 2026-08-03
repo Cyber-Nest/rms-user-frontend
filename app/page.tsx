@@ -155,21 +155,42 @@ export default function HomePage() {
     loadMenu();
   }, [selectedBranch]);
 
+  const executeSelectBranch = (branch: BranchStore) => {
+    clearCart();
+    setSelectedBranch(branch);
+    localStorage.setItem("cd_user_branch", JSON.stringify(branch));
+    applyBranchSettings(branch);
+  };
+
   const handleSelectBranch = (branch: BranchStore) => {
     if (
       cartItems.length > 0 &&
       selectedBranch &&
       selectedBranch._id !== branch._id
     ) {
-      if (
-        confirm(
-          `Switching to ${branch.name} will clear your current cart. Continue?`,
-        )
-      ) {
-        clearCart();
-      } else {
-        return;
-      }
+      toast((t) => (
+        <div className="flex flex-col gap-2 p-1 text-xs">
+          <p className="font-700 text-neutral-900">Switching to {branch.name} will clear your current cart. Continue?</p>
+          <div className="flex items-center justify-end gap-2 mt-1">
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="px-2.5 py-1 font-600 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                toast.dismiss(t.id);
+                executeSelectBranch(branch);
+              }}
+              className="px-2.5 py-1 font-700 bg-brand-primary text-white rounded-lg cursor-pointer shadow-sm"
+            >
+              Switch & Clear Cart
+            </button>
+          </div>
+        </div>
+      ), { duration: 5000, position: "top-center" });
+      return;
     }
     setSelectedBranch(branch);
     localStorage.setItem("cd_user_branch", JSON.stringify(branch));
@@ -178,12 +199,29 @@ export default function HomePage() {
 
   const handleSwitchStoreClick = () => {
     if (cartItems.length > 0) {
-      if (
-        confirm("Changing store will clear your current bag items. Continue?")
-      ) {
-        clearCart();
-        setSelectedBranch(null);
-      }
+      toast((t) => (
+        <div className="flex flex-col gap-2 p-1 text-xs">
+          <p className="font-700 text-neutral-900">Changing store will clear your current bag items. Continue?</p>
+          <div className="flex items-center justify-end gap-2 mt-1">
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="px-2.5 py-1 font-600 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                toast.dismiss(t.id);
+                clearCart();
+                setSelectedBranch(null);
+              }}
+              className="px-2.5 py-1 font-700 bg-brand-primary text-white rounded-lg cursor-pointer shadow-sm"
+            >
+              Clear & Switch
+            </button>
+          </div>
+        </div>
+      ), { duration: 5000, position: "top-center" });
     } else {
       setSelectedBranch(null);
     }
