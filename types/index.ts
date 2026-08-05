@@ -55,6 +55,8 @@ export interface SelectedModifier {
 export interface CartItem {
   id: string; // unique composite key (menuItemId + selected option IDs)
   menuItemId: string;
+  categoryId?: string;
+  categoryName?: string;
   name: string;
   image?: string;
   basePrice: number;

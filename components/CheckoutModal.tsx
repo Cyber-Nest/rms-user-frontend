@@ -15,6 +15,7 @@ import {
   Locate,
   Truck,
   Heart,
+  Tag,
 } from "lucide-react";
 import { CartItem } from "../types";
 import { useCart } from "../context/CartContext";
@@ -86,6 +87,60 @@ function CheckoutModalInner({
   const [notes, setNotes] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Promo state
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<any>(null);
+  const [validatingPromo, setValidatingPromo] = useState(false);
+  const [promoError, setPromoError] = useState("");
+
+  const handleApplyPromo = async () => {
+    if (!promoCodeInput.trim()) return;
+    setValidatingPromo(true);
+    setPromoError("");
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+      const branchId = selectedBranch?._id || selectedBranch?.id;
+      const res = await axios.post(`${apiUrl}/promos/validate`, {
+        code: promoCodeInput.trim(),
+        channel: "online",
+        branchId,
+        subtotal,
+        items: cartItems,
+      });
+
+      if (res.data.success && res.data.data) {
+        setAppliedPromo(res.data.data);
+        toast.success(`Promo "${res.data.data.code}" applied! -$${res.data.data.discountAmount.toFixed(2)}`);
+      } else {
+        setPromoError(res.data.message || "Invalid promo code.");
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Failed to validate promo code.";
+      setPromoError(msg);
+    } finally {
+      setValidatingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoCodeInput("");
+    setPromoError("");
+  };
+
+  const promoDiscountAmount = useMemo(() => {
+    return appliedPromo ? Number(appliedPromo.discountAmount || 0) : 0;
+  }, [appliedPromo]);
+
+  const discountedSubtotal = useMemo(() => {
+    return Math.max(0, (subtotal || 0) - promoDiscountAmount);
+  }, [subtotal, promoDiscountAmount]);
+
+  const calculatedTax = useMemo(() => {
+    const rate = (branchTaxRate || 5) / 100;
+    return Math.round(discountedSubtotal * rate * 100) / 100;
+  }, [discountedSubtotal, branchTaxRate]);
+
   // Tip state ($0, $1, $3, $5, $10, custom)
   const [tipOption, setTipOption] = useState<"0" | "1" | "3" | "5" | "10" | "custom">("3");
   const [customTipInput, setCustomTipInput] = useState("");
@@ -99,8 +154,8 @@ function CheckoutModalInner({
   }, [tipOption, customTipInput]);
 
   const finalTotal = useMemo(() => {
-    return Math.round(((subtotal || 0) + (tax || 0) + (orderType === "delivery" ? (deliveryFee || 0) : 0) + tipAmount) * 100) / 100;
-  }, [subtotal, tax, orderType, deliveryFee, tipAmount]);
+    return Math.round((discountedSubtotal + calculatedTax + (orderType === "delivery" ? (deliveryFee || 0) : 0) + tipAmount) * 100) / 100;
+  }, [discountedSubtotal, calculatedTax, orderType, deliveryFee, tipAmount]);
 
   const getTodayLocalString = () => {
     const d = new Date();
@@ -399,7 +454,10 @@ function CheckoutModalInner({
         kitchenLabel: item.kitchenLabel || 'chicken',
       })),
       subtotal: subtotal,
-      tax: tax,
+      discount: promoDiscountAmount,
+      discountType: appliedPromo ? "promo" : "none",
+      promoCode: appliedPromo ? appliedPromo.code : "",
+      tax: calculatedTax,
       taxRate: (branchTaxRate || 5) / 100,
       deliveryFee: orderType === "delivery" ? deliveryFee : 0,
       tip: tipAmount,
@@ -886,12 +944,89 @@ function CheckoutModalInner({
             />
           </div>
 
+          {/* PROMO CODE APPLY SECTION */}
+          <div className="space-y-2 pt-2 border-t border-neutral-100">
+            <label className="block text-[9px] font-bold text-neutral-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Have a Promo Code?</span>
+              {appliedPromo && (
+                <span className="text-[9.5px] font-bold text-emerald-600">
+                  -${appliedPromo.discountAmount.toFixed(2)} OFF
+                </span>
+              )}
+            </label>
+
+            {appliedPromo ? (
+              <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag size={14} className="text-emerald-600" />
+                  <div>
+                    <p className="text-xs font-black text-emerald-900 font-mono">
+                      {appliedPromo.code}
+                    </p>
+                    <p className="text-[9.5px] text-emerald-700 font-semibold">
+                      Saving ${appliedPromo.discountAmount.toFixed(2)} on your order
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRemovePromo}
+                  className="text-[10px] font-extrabold text-red-500 hover:text-red-700 cursor-pointer"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Tag size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={promoCodeInput}
+                    onChange={(e) => {
+                      setPromoCodeInput(e.target.value.toUpperCase());
+                      setPromoError("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleApplyPromo();
+                      }
+                    }}
+                    placeholder="Enter Promo Code (e.g. WELCOME50)"
+                    className="w-full bg-white border border-neutral-200 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-neutral-800 uppercase tracking-wider focus:outline-none focus:border-brand-primary placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-neutral-400"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyPromo}
+                  disabled={validatingPromo || !promoCodeInput.trim()}
+                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+                >
+                  {validatingPromo ? "Validating..." : "Apply"}
+                </button>
+              </div>
+            )}
+
+            {promoError && (
+              <p className="text-[10px] text-red-500 font-bold bg-red-50 border border-red-100 rounded-lg p-2">
+                ⚠️ {promoError}
+              </p>
+            )}
+          </div>
+
           {/* Pricing Totals box */}
           <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200/50 space-y-2">
             <div className="flex justify-between text-[10px] text-neutral-500 font-semibold">
               <span>Subtotal</span>
               <span>${subtotal.toFixed(2)}</span>
             </div>
+            {promoDiscountAmount > 0 && (
+              <div className="flex justify-between text-[10px] text-amber-600 font-bold">
+                <span>Promo Discount ({appliedPromo?.code})</span>
+                <span>-${promoDiscountAmount.toFixed(2)}</span>
+              </div>
+            )}
             {orderType === "delivery" && (
               <div className="flex justify-between text-[10px] text-neutral-500 font-semibold">
                 <span>Delivery Fee</span>
@@ -900,7 +1035,7 @@ function CheckoutModalInner({
             )}
             <div className="flex justify-between text-[10px] text-neutral-500 font-semibold">
               <span>GST ({branchTaxRate}%)</span>
-              <span>${tax.toFixed(2)}</span>
+              <span>${calculatedTax.toFixed(2)}</span>
             </div>
             {tipAmount > 0 && (
               <div className="flex justify-between text-[10px] text-brand-primary font-bold">

@@ -116,6 +116,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newItem: CartItem = {
         id: cartItemId,
         menuItemId: menuItem.id,
+        categoryId: menuItem.categoryId,
         name: menuItem.name,
         image: menuItem.image,
         basePrice: menuItem.price,
