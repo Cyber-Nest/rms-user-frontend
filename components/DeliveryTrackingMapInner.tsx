@@ -310,6 +310,10 @@ export default function DeliveryTrackingMapInner({
 
   // Track location freshness (green/yellow/red status)
   useEffect(() => {
+    if (driverInfo?.status === "offline" || driverInfo?.isDutyOnline === false) {
+      setFreshness("offline");
+      return;
+    }
     if (!lastUpdate) return;
 
     const interval = setInterval(() => {
@@ -324,7 +328,7 @@ export default function DeliveryTrackingMapInner({
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [lastUpdate]);
+  }, [lastUpdate, driverInfo?.status, driverInfo?.isDutyOnline]);
 
   const mapCenter: [number, number] = [
     (restaurantCoords.lat + customerCoords.lat) / 2,

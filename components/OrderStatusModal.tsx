@@ -361,8 +361,14 @@ export default function OrderStatusModal({
     if (status === "cancelled") return -1;
     if (status === "completed") return 3;
     if (status === "ready") {
-      if (isDelivery && !driverInfo?.assigned) {
-        return 1; // Keep at "Preparing" if driver not assigned yet
+      if (isDelivery) {
+        const isDriverOnline =
+          driverInfo?.assigned &&
+          driverInfo?.driver?.status !== "offline" &&
+          driverInfo?.driver?.isDutyOnline !== false;
+        if (!isDriverOnline) {
+          return 1; // Keep at "Preparing" until driver goes online
+        }
       }
       return 2;
     }
@@ -554,42 +560,45 @@ export default function OrderStatusModal({
             </div>
           )}
 
-          {/* Live Delivery Tracking Map Button */}
-          {isDelivery && driverInfo?.assigned && currentStatus === "ready" && (
-            <div className="mt-4 space-y-3">
-              <button
-                type="button"
-                onClick={() => setShowFullScreenMap(true)}
-                className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white py-3 px-4 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold active:scale-[0.98] transition-all cursor-pointer shadow-md shadow-brand-primary/10"
-              >
-                <MapPin size={15} />
-                <span>Track Live Delivery on Map</span>
-              </button>
+          {isDelivery &&
+            driverInfo?.assigned &&
+            currentStatus === "ready" &&
+            driverInfo.driver?.status !== "offline" &&
+            driverInfo.driver?.isDutyOnline !== false && (
+              <div className="mt-4 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setShowFullScreenMap(true)}
+                  className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white py-3 px-4 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold active:scale-[0.98] transition-all cursor-pointer shadow-md shadow-brand-primary/10"
+                >
+                  <MapPin size={15} />
+                  <span>Track Live Delivery on Map</span>
+                </button>
 
-              {/* Driver Details */}
-              {driverInfo.driver && (
-                <div className="bg-neutral-50 border border-neutral-200 p-4 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-                      Your Driver
-                    </p>
-                    <p className="text-sm font-black text-neutral-800">
-                      {driverInfo.driver.name}
-                    </p>
+                {/* Driver Details */}
+                {driverInfo.driver && (
+                  <div className="bg-neutral-50 border border-neutral-200 p-4 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                        Your Driver
+                      </p>
+                      <p className="text-sm font-black text-neutral-800">
+                        {driverInfo.driver.name}
+                      </p>
+                    </div>
+                    {driverInfo.driver.phone && (
+                      <a
+                        href={`tel:${driverInfo.driver.phone}`}
+                        className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center hover:bg-emerald-100 transition-colors shadow-sm"
+                        title="Call Driver"
+                      >
+                        <Phone size={16} />
+                      </a>
+                    )}
                   </div>
-                  {driverInfo.driver.phone && (
-                    <a
-                      href={`tel:${driverInfo.driver.phone}`}
-                      className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center hover:bg-emerald-100 transition-colors shadow-sm"
-                      title="Call Driver"
-                    >
-                      <Phone size={16} />
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
 
           {/* Delivery Specific notice */}
           {isDelivery && currentStatus === "preparing" && (
