@@ -235,7 +235,8 @@ export default function DeliveryTrackingMapInner({
 
   const prevPosRef = useRef<[number, number] | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const lastEventTimeRef = useRef<number>(Date.now());
+  // Start at 0 so the FIRST location event snaps instantly (no animation from page-load gap)
+  const lastEventTimeRef = useRef<number>(0);
 
   // Pusher setup for real-time tracking via client events (browser-to-browser)
   useEffect(() => {
@@ -257,11 +258,20 @@ export default function DeliveryTrackingMapInner({
 
       // ─── Adaptive animation duration ───
       const now = Date.now();
-      const timeSinceLast = now - lastEventTimeRef.current;
+      const timeSinceLast = lastEventTimeRef.current === 0 ? 0 : now - lastEventTimeRef.current;
       lastEventTimeRef.current = now;
+
+      // First event (or no prior event): snap immediately — no slow animation from page-load gap
+      if (timeSinceLast === 0 || !prevPosRef.current) {
+        setDriverPos([targetLat, targetLng]);
+        prevPosRef.current = [targetLat, targetLng];
+        animationFrameRef.current = null;
+        return;
+      }
+
       // Fill 85% of the gap between events — no freeze zone
-      // Clamp between 1s min and 8s max for safety
-      const duration = Math.max(1000, Math.min(timeSinceLast * 0.85, 8000));
+      // Clamp between 800ms min and 3s max (was 8s — caused perceived lag)
+      const duration = Math.max(800, Math.min(timeSinceLast * 0.85, 3000));
 
       // Interpolate transition
       const fromLat = prevPosRef.current ? prevPosRef.current[0] : targetLat;
