@@ -158,9 +158,12 @@ function CheckoutModalInner({
   }, [discountedSubtotal, calculatedTax, orderType, deliveryFee, tipAmount]);
 
   const getTodayLocalString = () => {
-    const d = new Date();
-    const tzOffset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - tzOffset).toISOString().split("T")[0];
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Edmonton",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()).replace(/\//g, "-");
   };
 
   // Evaluate real-time store timing status

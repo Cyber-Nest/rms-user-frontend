@@ -32,6 +32,39 @@ export interface BranchWithSettings {
   settings?: BranchStoreSettings;
 }
 
+// ── Alberta Timezone Helpers ──────────────────────────────────────────────────
+const ALBERTA_TZ = "America/Edmonton";
+
+/**
+ * Returns current date/time parts in Alberta (America/Edmonton) timezone.
+ * Avoids relying on browser's local timezone (could be IST, UTC, etc.).
+ */
+function getAlbertaNow(): { dayName: string; hours: number; minutes: number; dateStr: string } {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: ALBERTA_TZ,
+    weekday: "long",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+  const dayName = get("weekday");
+  const hours = parseInt(get("hour"), 10);
+  const minutes = parseInt(get("minute"), 10);
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  const dateStr = `${year}-${month}-${day}`;
+
+  return { dayName, hours, minutes, dateStr };
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const DAYS_OF_WEEK = [
   "Sunday",
   "Monday",
@@ -62,8 +95,7 @@ export function parse12HourTime(timeStr: string): {
 }
 
 export function getTodayBranchSchedule(branch: BranchWithSettings | null) {
-  const now = new Date();
-  const dayName = DAYS_OF_WEEK[now.getDay()];
+  const { dayName } = getAlbertaNow();
 
   if (
     !branch ||
@@ -152,8 +184,8 @@ export function isBranchCurrentlyOpen(branch: BranchWithSettings | null): {
     };
   }
 
-  const now = new Date();
-  const currentTotalMins = now.getHours() * 60 + now.getMinutes();
+  const { hours: currentHours, minutes: currentMinutes } = getAlbertaNow();
+  const currentTotalMins = currentHours * 60 + currentMinutes;
 
   const startParsed = parse12HourTime(schedule.startTime);
   const startTotalMins = startParsed.hours * 60 + startParsed.minutes;
@@ -206,61 +238,56 @@ export function generateValidTimeSlotsForBranch(
   const startParsed = parse12HourTime(schedule.startTime);
   const endParsed = parse12HourTime(schedule.endTime);
 
-  const now = new Date();
-  const tzOffset = now.getTimezoneOffset() * 60000;
-  const todayStr = new Date(now.getTime() - tzOffset)
-    .toISOString()
-    .split("T")[0];
+  const { dateStr: todayStr, hours: nowHours, minutes: nowMinutes } = getAlbertaNow();
 
-  let startTime = new Date();
+  // Alberta current time as minutes-since-midnight
+  const nowTotalMins = nowHours * 60 + nowMinutes;
+
+  let startTime = { hours: 0, minutes: 0 }; // will be set below
 
   if (selectedDateStr === todayStr) {
-    // Current time + 1 hour prep buffer (60 mins)
-    let minTime = new Date(now.getTime() + 60 * 60 * 1000);
+    // Current Alberta time + 1 hour prep buffer (60 mins)
+    let minTotalMins = nowTotalMins + 60;
 
-    // Earliest time slot allowed is 1 hour AFTER store opening time
-    const storeEarliestSlotTime = new Date();
-    storeEarliestSlotTime.setHours(
-      startParsed.hours + 1,
-      startParsed.minutes,
-      0,
-      0,
-    );
+    // Earliest time slot is 1 hour AFTER store opening time
+    const storeEarliestMins = (startParsed.hours + 1) * 60 + startParsed.minutes;
 
-    if (minTime < storeEarliestSlotTime) {
-      minTime = storeEarliestSlotTime;
+    if (minTotalMins < storeEarliestMins) {
+      minTotalMins = storeEarliestMins;
     }
 
     // Round minutes up to next 15-minute interval
-    const mins = minTime.getMinutes();
-    const roundedMins = Math.ceil(mins / 15) * 15;
-    if (roundedMins === 60) {
-      minTime.setHours(minTime.getHours() + 1);
-      minTime.setMinutes(0);
+    const totalMinHours = Math.floor(minTotalMins / 60);
+    const totalMinMins = minTotalMins % 60;
+    const roundedMins = Math.ceil(totalMinMins / 15) * 15;
+    if (roundedMins >= 60) {
+      startTime = { hours: totalMinHours + 1, minutes: 0 };
     } else {
-      minTime.setMinutes(roundedMins);
+      startTime = { hours: totalMinHours, minutes: roundedMins };
     }
-    minTime.setSeconds(0, 0);
-    startTime = minTime;
   } else {
-    // Future date: time slots start 1 hour after opening time (e.g. 10:00 AM opening -> 11:00 AM slot)
-    startTime.setHours(startParsed.hours + 1, startParsed.minutes, 0, 0);
+    // Future date: slots start 1 hour after opening time
+    startTime = { hours: startParsed.hours + 1, minutes: startParsed.minutes };
   }
 
-  const endTime = new Date();
-  endTime.setHours(endParsed.hours, endParsed.minutes, 0, 0);
+  const endTime = { hours: endParsed.hours, minutes: endParsed.minutes };
 
-  while (startTime < endTime) {
-    const hours = startTime.getHours();
-    const currentMins = startTime.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const formattedHours = hours % 12 === 0 ? 12 : hours % 12;
-    const formattedMinutes = currentMins < 10 ? `0${currentMins}` : currentMins;
+  // Generate 15-minute slots
+  let curHours = startTime.hours;
+  let curMins = startTime.minutes;
+  const endTotalMins = endTime.hours * 60 + endTime.minutes;
 
-    const timeStr = `${formattedHours}:${formattedMinutes} ${ampm}`;
-    slots.push(timeStr);
+  while (curHours * 60 + curMins < endTotalMins) {
+    const ampm = curHours >= 12 ? "PM" : "AM";
+    const displayHours = curHours % 12 === 0 ? 12 : curHours % 12;
+    const displayMins = curMins < 10 ? `0${curMins}` : String(curMins);
+    slots.push(`${displayHours}:${displayMins} ${ampm}`);
 
-    startTime.setMinutes(startTime.getMinutes() + 15);
+    curMins += 15;
+    if (curMins >= 60) {
+      curMins -= 60;
+      curHours += 1;
+    }
   }
 
   return slots;
