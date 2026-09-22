@@ -161,6 +161,46 @@ export default function ModifierModal({
     setSelections(newSelections);
   };
 
+  const handleIncrementCounter = (g: ModifierGroup, opt: ModifierOption) => {
+    const cur = selections[g.id] ?? [];
+    if (cur.length < g.maxSelection) {
+      const next = [...cur, opt];
+      const newSelections = { ...selections, [g.id]: next };
+
+      const initNested = (o: ModifierOption) => {
+        if (o.modifierGroups) {
+          o.modifierGroups.forEach((subG) => {
+            if (newSelections[subG.id] === undefined) {
+              const defs = subG.options.filter((so) => so.isDefault);
+              newSelections[subG.id] =
+                defs.length > 0
+                  ? defs
+                  : subG.required &&
+                      subG.maxSelection === 1 &&
+                      subG.options.length > 0
+                    ? [subG.options[0]]
+                    : [];
+              newSelections[subG.id].forEach(initNested);
+            }
+          });
+        }
+      };
+
+      initNested(opt);
+      setSelections(newSelections);
+    }
+  };
+
+  const handleDecrementCounter = (g: ModifierGroup, opt: ModifierOption) => {
+    const cur = selections[g.id] ?? [];
+    const idx = cur.findLastIndex((o) => o.id === opt.id);
+    if (idx !== -1) {
+      const next = [...cur];
+      next.splice(idx, 1);
+      setSelections({ ...selections, [g.id]: next });
+    }
+  };
+
   const isSelected = (groupId: string, optionId: string) =>
     (selections[groupId] ?? []).some((o) => o.id === optionId);
 
@@ -189,13 +229,24 @@ export default function ModifierModal({
     allActiveGroups.forEach((g) => {
       const isRoot = item.modifierGroups?.some((rg) => rg.id === g.id) ?? false;
       const opts = selections[g.id] ?? [];
-      opts.forEach((o) => {
+
+      const counts = opts.reduce((acc, o) => {
+        acc[o.id] = (acc[o.id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const uniqueOpts = Array.from(
+        new Set(opts.map((o) => o.id))
+      ).map((id) => opts.find((o) => o.id === id)!);
+
+      uniqueOpts.forEach((o) => {
         selectedMods.push({
           groupId: g.id,
           groupName: g.name,
           optionId: o.id,
           optionName: o.name,
           price: o.price,
+          quantity: counts[o.id],
           isRoot,
         });
       });
@@ -247,83 +298,165 @@ export default function ModifierModal({
 
         {/* Options Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {g.options.map((opt) => {
-            const sel = isSelected(g.id, opt.id);
-            const isCard = g.displayType === "card";
-            return (
-              <div key={opt.id} className="flex flex-col">
-                <button
-                  type="button"
-                  onClick={() => toggleOption(g, opt)}
-                  className={`relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer active:scale-[0.98] w-full ${
-                    sel
+          {g.displayType === "counter" ? (
+            g.options.map((opt) => {
+              const groupOpts = selections[g.id] ?? [];
+              const count = groupOpts.filter((o) => o.id === opt.id).length;
+              const totalGroupCount = groupOpts.length;
+              const canAdd = totalGroupCount < g.maxSelection;
+              const canRemove = count > 0;
+
+              return (
+                <div
+                  key={opt.id}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                    count > 0
                       ? "border-brand-primary bg-orange-50/50 ring-1 ring-brand-primary"
                       : "border-neutral-200 bg-white hover:bg-neutral-50"
                   }`}
                 >
-                  {/* Select Circle/Box */}
-                  {!isCard && (
-                    <div
-                      className={`w-4 h-4 border flex items-center justify-center flex-shrink-0 transition-all ${
-                        g.maxSelection === 1 ? "rounded-full" : "rounded"
-                      } ${
-                        sel
-                          ? "bg-brand-primary border-brand-primary text-white"
-                          : "border-neutral-300 bg-white"
-                      }`}
-                    >
-                      {sel && <Check size={10} strokeWidth={3} />}
-                    </div>
-                  )}
-
-                  {/* Thumbnail Image for Card type or if option has an image */}
-                  {(isCard || !!opt.image) && (
-                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200 flex-shrink-0">
-                      <img
-                        src={
-                          opt.image ||
-                          item.image ||
-                          "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60"
-                        }
-                        alt={opt.name}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src =
-                            "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60";
-                        }}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-w-0 pr-4">
-                    <p className="text-[11px] font-semibold text-neutral-800 truncate">
-                      {opt.name}
-                    </p>
-                    {opt.price > 0 && (
-                      <p className="text-[10px] font-bold text-brand-primary mt-0.5">
-                        +${opt.price.toFixed(2)}
-                      </p>
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                    {(opt.image || item.image) && (
+                      <div className="w-9 h-9 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200 flex-shrink-0">
+                        <img
+                          src={
+                            opt.image ||
+                            item.image ||
+                            "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60"
+                          }
+                          alt={opt.name}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60";
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold text-neutral-800 truncate">
+                        {opt.name}
+                      </p>
+                      {opt.price > 0 && (
+                        <p className="text-[10px] font-bold text-brand-primary mt-0.5">
+                          +${opt.price.toFixed(2)}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Top-Right Tick for Cards */}
-                  {isCard && (
-                    <div
-                      className={`absolute top-2 right-2 w-4 h-4 border flex items-center justify-center transition-all ${
-                        g.maxSelection === 1 ? "rounded-full" : "rounded"
-                      } ${
-                        sel
-                          ? "bg-brand-primary border-brand-primary text-white"
-                          : "border-neutral-300"
+                  {/* Counter Controls */}
+                  <div className="flex items-center gap-1.5 bg-white border border-neutral-200 rounded-lg p-1 flex-shrink-0 shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleDecrementCounter(g, opt)}
+                      disabled={!canRemove}
+                      className={`w-6 h-6 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                        canRemove
+                          ? "bg-neutral-100 hover:bg-neutral-200 text-neutral-700 active:scale-95"
+                          : "bg-neutral-50 text-neutral-300 cursor-not-allowed"
                       }`}
                     >
-                      {sel && <Check size={10} strokeWidth={3} />}
+                      <Minus size={11} strokeWidth={2.5} />
+                    </button>
+                    <span className="w-4 text-center text-[11px] font-bold text-neutral-800">
+                      {count}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleIncrementCounter(g, opt)}
+                      disabled={!canAdd}
+                      className={`w-6 h-6 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                        canAdd
+                          ? "bg-brand-primary hover:bg-brand-primary-hover text-white active:scale-95 shadow-xs"
+                          : "bg-neutral-100 text-neutral-300 cursor-not-allowed"
+                      }`}
+                    >
+                      <Plus size={11} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            g.options.map((opt) => {
+              const sel = isSelected(g.id, opt.id);
+              const isCard = g.displayType === "card";
+              return (
+                <div key={opt.id} className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => toggleOption(g, opt)}
+                    className={`relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer active:scale-[0.98] w-full ${
+                      sel
+                        ? "border-brand-primary bg-orange-50/50 ring-1 ring-brand-primary"
+                        : "border-neutral-200 bg-white hover:bg-neutral-50"
+                    }`}
+                  >
+                    {/* Select Circle/Box */}
+                    {!isCard && (
+                      <div
+                        className={`w-4 h-4 border flex items-center justify-center flex-shrink-0 transition-all ${
+                          g.maxSelection === 1 ? "rounded-full" : "rounded"
+                        } ${
+                          sel
+                            ? "bg-brand-primary border-brand-primary text-white"
+                            : "border-neutral-300 bg-white"
+                        }`}
+                      >
+                        {sel && <Check size={10} strokeWidth={3} />}
+                      </div>
+                    )}
+
+                    {/* Thumbnail Image for Card type or if option has an image */}
+                    {(isCard || !!opt.image) && (
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200 flex-shrink-0">
+                        <img
+                          src={
+                            opt.image ||
+                            item.image ||
+                            "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60"
+                          }
+                          alt={opt.name}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60";
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex-1 min-w-0 pr-4">
+                      <p className="text-[11px] font-semibold text-neutral-800 truncate">
+                        {opt.name}
+                      </p>
+                      {opt.price > 0 && (
+                        <p className="text-[10px] font-bold text-brand-primary mt-0.5">
+                          +${opt.price.toFixed(2)}
+                        </p>
+                      )}
                     </div>
-                  )}
-                </button>
-              </div>
-            );
-          })}
+
+                    {/* Top-Right Tick for Cards */}
+                    {isCard && (
+                      <div
+                        className={`absolute top-2 right-2 w-4 h-4 border flex items-center justify-center transition-all ${
+                          g.maxSelection === 1 ? "rounded-full" : "rounded"
+                        } ${
+                          sel
+                            ? "bg-brand-primary border-brand-primary text-white"
+                            : "border-neutral-300"
+                        }`}
+                      >
+                        {sel && <Check size={10} strokeWidth={3} />}
+                      </div>
+                    )}
+                  </button>
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Nested Modifier Groups */}
@@ -541,27 +674,39 @@ export default function ModifierModal({
               {allActiveGroups.map((g) => {
                 const opts = selections[g.id] ?? [];
                 if (!opts.length) return null;
+                const counts = opts.reduce((acc, o) => {
+                  acc[o.id] = (acc[o.id] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const uniqueOpts = Array.from(
+                  new Set(opts.map((o) => o.id))
+                ).map((id) => opts.find((o) => o.id === id)!);
+
                 return (
                   <div key={g.id} className="space-y-1">
                     <p className="text-[8.5px] font-bold text-neutral-400 uppercase tracking-wider">
                       {g.name}
                     </p>
-                    {opts.map((o) => (
-                      <div
-                        key={o.id}
-                        className="flex items-center gap-1.5 text-brand-primary pl-1 text-[11px]"
-                      >
-                        <span className="font-bold">✓</span>
-                        <span className="text-neutral-700 font-medium">
-                          {o.name}
-                        </span>
-                        {o.price > 0 && (
-                          <span className="text-[9.5px] text-neutral-400 ml-auto">
-                            +${o.price.toFixed(2)}
+                    {uniqueOpts.map((o) => {
+                      const qty = counts[o.id];
+                      return (
+                        <div
+                          key={o.id}
+                          className="flex items-center gap-1.5 text-brand-primary pl-1 text-[11px]"
+                        >
+                          <span className="font-bold">✓</span>
+                          <span className="text-neutral-700 font-medium">
+                            {o.name} {qty > 1 ? `(x${qty})` : ""}
                           </span>
-                        )}
-                      </div>
-                    ))}
+                          {o.price > 0 && (
+                            <span className="text-[9.5px] text-neutral-400 ml-auto">
+                              +${(o.price * qty).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
