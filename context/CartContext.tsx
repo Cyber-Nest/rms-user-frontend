@@ -19,6 +19,7 @@ interface CartContextType {
   branchTaxRate: number;
   setBranchTaxRate: (rate: number) => void;
   addToCart: (menuItem: MenuItem, selectedModifiers: SelectedModifier[], quantity?: number, note?: string) => void;
+  updateCartItem: (cartItemId: string, menuItem: MenuItem, selectedModifiers: SelectedModifier[], quantity?: number, note?: string) => void;
   removeFromCart: (cartItemId: string) => void;
   increaseQuantity: (cartItemId: string) => void;
   decreaseQuantity: (cartItemId: string) => void;
@@ -134,6 +135,36 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toast.success(`${menuItem.name} added to cart!`);
   };
 
+  const updateCartItem = (
+    cartItemId: string,
+    menuItem: MenuItem,
+    selectedModifiers: SelectedModifier[],
+    quantity = 1,
+    note = ''
+  ) => {
+    const newCartItemId = generateCartItemId(menuItem.id, selectedModifiers);
+    const modifierSum = selectedModifiers.reduce((sum, mod) => sum + mod.price, 0);
+    const itemUnitCost = menuItem.price + modifierSum;
+
+    const updatedCartItems = cartItems.map((item) => {
+      if (item.id === cartItemId) {
+        return {
+          ...item,
+          id: newCartItemId,
+          selectedModifiers,
+          quantity,
+          totalPrice: roundToTwo(itemUnitCost * quantity),
+          note,
+        };
+      }
+      return item;
+    });
+
+    setCartItems(updatedCartItems);
+    saveCartToStorage(updatedCartItems);
+    toast.success(`${menuItem.name} updated in cart!`);
+  };
+
   const removeFromCart = (cartItemId: string) => {
     const item = cartItems.find((i) => i.id === cartItemId);
     const updated = cartItems.filter((i) => i.id !== cartItemId);
@@ -217,6 +248,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         branchTaxRate,
         setBranchTaxRate,
         addToCart,
+        updateCartItem,
         removeFromCart,
         increaseQuantity,
         decreaseQuantity,

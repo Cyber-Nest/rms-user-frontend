@@ -10,18 +10,22 @@ import {
 } from "../types";
 import { useCart } from "../context/CartContext";
 
+import { CartItem } from "../types";
+
 interface ModifierModalProps {
   item: MenuItem | null;
+  editingCartItem?: CartItem | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export default function ModifierModal({
   item,
+  editingCartItem,
   isOpen,
   onClose,
 }: ModifierModalProps) {
-  const { addToCart } = useCart();
+  const { addToCart, updateCartItem } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [selections, setSelections] = useState<
     Record<string, ModifierOption[]>
@@ -32,33 +36,70 @@ export default function ModifierModal({
   // Reset/Initialize default selections when item opens
   useEffect(() => {
     if (!item) return;
-    setQuantity(1);
     setActiveIdx(0);
-    setNote("");
 
-    const init: Record<string, ModifierOption[]> = {};
-    const initGroup = (g: ModifierGroup) => {
-      if (!g || !g.options) return;
-      const defs = g.options.filter((o) => o.isDefault);
-      const selected =
-        defs.length > 0
-          ? defs
-          : g.required && g.maxSelection === 1 && g.options.length > 0
-            ? [g.options[0]]
-            : [];
-      init[g.id] = selected;
+    if (editingCartItem) {
+      setQuantity(editingCartItem.quantity || 1);
+      setNote(editingCartItem.note || "");
 
-      // Recurse nested groups
-      selected.forEach((opt) => {
-        if (opt.modifierGroups) {
-          opt.modifierGroups.forEach(initGroup);
+      const init: Record<string, ModifierOption[]> = {};
+      const allGroups: ModifierGroup[] = [];
+      const collect = (groups?: ModifierGroup[]) => {
+        groups?.forEach((g) => {
+          allGroups.push(g);
+          g.options?.forEach((o) => {
+            if (o.modifierGroups) collect(o.modifierGroups);
+          });
+        });
+      };
+      collect(item.modifierGroups);
+
+      editingCartItem.selectedModifiers?.forEach((sm) => {
+        const group = allGroups.find(
+          (g) => g.id === sm.groupId || g.name === sm.groupName,
+        );
+        if (group) {
+          const opt = group.options?.find(
+            (o) => o.id === sm.optionId || o.name === sm.optionName,
+          );
+          if (opt) {
+            if (!init[group.id]) init[group.id] = [];
+            const count = sm.quantity || 1;
+            for (let i = 0; i < count; i++) {
+              init[group.id].push(opt);
+            }
+          }
         }
       });
-    };
+      setSelections(init);
+    } else {
+      setQuantity(1);
+      setNote("");
 
-    item.modifierGroups?.forEach(initGroup);
-    setSelections(init);
-  }, [item, isOpen]);
+      const init: Record<string, ModifierOption[]> = {};
+      const initGroup = (g: ModifierGroup) => {
+        if (!g || !g.options) return;
+        const defs = g.options.filter((o) => o.isDefault);
+        const selected =
+          defs.length > 0
+            ? defs
+            : g.required && g.maxSelection === 1 && g.options.length > 0
+              ? [g.options[0]]
+              : [];
+        init[g.id] = selected;
+
+        // Recurse nested groups
+        selected.forEach((opt) => {
+          if (opt.modifierGroups) {
+            opt.modifierGroups.forEach(initGroup);
+          }
+        });
+      };
+
+      item.modifierGroups?.forEach(initGroup);
+      setSelections(init);
+    }
+  }, [item, editingCartItem, isOpen]);
 
   // Auto-scroll active tab into view
   useEffect(() => {
@@ -224,6 +265,24 @@ export default function ModifierModal({
 
   const handleAddToCart = () => {
     if (!isValid()) return;
+
+    const parentMap = new Map<string, { parentOptId: string; parentOptName: string }>();
+    const collectParents = (groups: ModifierGroup[], parentOpt?: ModifierOption) => {
+      groups.forEach((g) => {
+        if (!g) return;
+        if (parentOpt) {
+          parentMap.set(g.id, { parentOptId: parentOpt.id, parentOptName: parentOpt.name });
+        }
+        const selectedOpts = selections[g.id] ?? [];
+        selectedOpts.forEach((opt) => {
+          if (opt.modifierGroups && opt.modifierGroups.length > 0) {
+            collectParents(opt.modifierGroups, opt);
+          }
+        });
+      });
+    };
+    if (item.modifierGroups) collectParents(item.modifierGroups);
+
     const selectedMods: SelectedModifier[] = [];
 
     allActiveGroups.forEach((g) => {
@@ -239,6 +298,8 @@ export default function ModifierModal({
         new Set(opts.map((o) => o.id))
       ).map((id) => opts.find((o) => o.id === id)!);
 
+      const parentInfo = parentMap.get(g.id);
+
       uniqueOpts.forEach((o) => {
         selectedMods.push({
           groupId: g.id,
@@ -248,11 +309,17 @@ export default function ModifierModal({
           price: o.price,
           quantity: counts[o.id],
           isRoot,
+          parentOptionId: parentInfo?.parentOptId,
+          parentOptionName: parentInfo?.parentOptName,
         });
       });
     });
 
-    addToCart(item, selectedMods, quantity, note);
+    if (editingCartItem) {
+      updateCartItem(editingCartItem.id, item, selectedMods, quantity, note);
+    } else {
+      addToCart(item, selectedMods, quantity, note);
+    }
     onClose();
   };
 

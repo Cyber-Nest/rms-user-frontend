@@ -18,8 +18,9 @@ import {
   Maximize2,
   X,
   ChefHat,
+  Pencil,
 } from "lucide-react";
-import { Category, MenuItem } from "../types";
+import { Category, MenuItem, CartItem } from "../types";
 import { useCart } from "../context/CartContext";
 import ModifierModal from "../components/ModifierModal";
 import CheckoutModal from "../components/CheckoutModal";
@@ -71,6 +72,28 @@ export default function HomePage() {
 
   // Customizer modal state
   const [activeItem, setActiveItem] = useState<MenuItem | null>(null);
+  const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
+
+  const handleEditCartItem = (cartItem: CartItem) => {
+    const menuItem = menuItems.find(
+      (m) => m.id === cartItem.menuItemId || m.name === cartItem.name
+    ) || ({
+      id: cartItem.menuItemId,
+      name: cartItem.name,
+      price: cartItem.basePrice,
+      image: cartItem.image,
+      categoryId: cartItem.categoryId,
+      modifierGroups: [],
+    } as unknown as MenuItem);
+
+    setEditingCartItem(cartItem);
+    setActiveItem(menuItem);
+  };
+
+  const handleCloseModifierModal = () => {
+    setActiveItem(null);
+    setEditingCartItem(null);
+  };
 
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [activeOrder, setActiveOrder] = useState<any | null>(null);
@@ -336,6 +359,7 @@ export default function HomePage() {
   }, [menuItems, selectedCategory, searchQuery, sortBy]);
 
   const handleOpenModifiers = (item: MenuItem) => {
+    setEditingCartItem(null);
     if (item.modifierGroups && item.modifierGroups.length > 0) {
       setActiveItem(item);
     } else {
@@ -800,66 +824,76 @@ export default function HomePage() {
           >
             {cartItems.length > 0 ? (
               cartItems.map((cartItem) => (
-                <div key={cartItem.id} className="py-3 flex flex-col gap-1.5">
+                <div key={cartItem.id} className="py-3 flex flex-col gap-1.5 border-b border-neutral-100/80 last:border-0">
                   <div className="flex items-start gap-2 justify-between">
-                    <div>
-                      <h4 className="text-[11px] font-extrabold text-neutral-800 leading-snug">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-[13px] font-black text-neutral-900 leading-snug truncate">
                         {cartItem.name}
                       </h4>
                       {/* Selected modifiers display */}
                       {cartItem.selectedModifiers.length > 0 && (
-                        <div className="text-[9px] text-neutral-400 mt-1 space-y-0.5">
-                          {cartItem.selectedModifiers.map((mod) => (
+                        <div className="text-[11.5px] font-bold text-neutral-700 mt-1 space-y-0.5">
+                          {cartItem.selectedModifiers.map((mod, idx) => (
                             <p
-                              key={mod.optionId}
-                              className="flex items-center gap-1 pl-1"
+                              key={`${mod.optionId}-${idx}`}
+                              className="flex items-center gap-1.5 pl-1"
                             >
-                              <span className="text-brand-primary">•</span>
+                              <span className="text-brand-primary font-black">•</span>
                               <span>{mod.optionName}</span>
                               {mod.price > 0 && (
-                                <span>(+${mod.price.toFixed(2)})</span>
+                                <span className="text-brand-primary font-extrabold">(+${mod.price.toFixed(2)})</span>
                               )}
                             </p>
                           ))}
                         </div>
                       )}
                       {cartItem.note && (
-                        <p className="text-[9px] text-brand-primary font-medium italic mt-1 bg-orange-50/50 px-2 py-0.5 rounded-md border border-orange-100/50">
+                        <p className="text-[10px] text-amber-800 font-bold italic mt-1 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60 inline-block">
                           Note: &ldquo;{cartItem.note}&rdquo;
                         </p>
                       )}
                     </div>
-                    <span className="text-xs font-extrabold text-neutral-700 ml-auto flex-shrink-0">
+                    <span className="text-[13px] font-black text-neutral-900 ml-auto flex-shrink-0">
                       ${cartItem.totalPrice.toFixed(2)}
                     </span>
                   </div>
 
-                  {/* Qty incrementors */}
+                  {/* Qty incrementors + Edit + Remove */}
                   <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center gap-2 border border-neutral-200 bg-white rounded-lg px-2 py-0.5">
+                    <div className="flex items-center gap-2 border border-neutral-200 bg-white rounded-lg px-2 py-0.5 shadow-2xs">
                       <button
                         onClick={() => decreaseQuantity(cartItem.id)}
                         className="text-neutral-500 hover:text-brand-primary cursor-pointer p-0.5"
                       >
-                        <Minus size={9} />
+                        <Minus size={10} />
                       </button>
-                      <span className="text-[10px] font-black text-neutral-800 w-3 text-center">
+                      <span className="text-[11px] font-black text-neutral-800 w-3 text-center">
                         {cartItem.quantity}
                       </span>
                       <button
                         onClick={() => increaseQuantity(cartItem.id)}
                         className="text-neutral-500 hover:text-brand-primary cursor-pointer p-0.5"
                       >
-                        <Plus size={9} />
+                        <Plus size={10} />
                       </button>
                     </div>
 
-                    <button
-                      onClick={() => removeFromCart(cartItem.id)}
-                      className="text-[9px] font-bold text-neutral-400 hover:text-brand-red cursor-pointer"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditCartItem(cartItem)}
+                        title="Edit order customization"
+                        className="text-[10px] font-extrabold text-sky-700 bg-sky-50 hover:bg-sky-100 hover:text-sky-800 px-2 py-0.5 rounded-md border border-sky-200/80 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Pencil size={10} />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => removeFromCart(cartItem.id)}
+                        className="text-[10px] font-bold text-neutral-400 hover:text-brand-red cursor-pointer px-1 py-0.5"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -941,48 +975,48 @@ export default function HomePage() {
             >
               {cartItems.length > 0 ? (
                 cartItems.map((cartItem) => (
-                  <div key={cartItem.id} className="py-3 flex flex-col gap-1.5">
+                  <div key={cartItem.id} className="py-3 flex flex-col gap-1.5 border-b border-neutral-100/80 last:border-0">
                     <div className="flex items-start gap-2 justify-between">
-                      <div>
-                        <h4 className="text-[11px] font-extrabold text-neutral-800 leading-snug">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-[13px] font-black text-neutral-900 leading-snug truncate">
                           {cartItem.name}
                         </h4>
                         {cartItem.selectedModifiers.length > 0 && (
-                          <div className="text-[9px] text-neutral-400 mt-1 space-y-0.5">
-                            {cartItem.selectedModifiers.map((mod) => (
+                          <div className="text-[11.5px] font-bold text-neutral-700 mt-1 space-y-0.5">
+                            {cartItem.selectedModifiers.map((mod, idx) => (
                               <p
-                                key={mod.optionId}
-                                className="flex items-center gap-1 pl-1"
+                                key={`${mod.optionId}-${idx}`}
+                                className="flex items-center gap-1.5 pl-1"
                               >
-                                <span className="text-brand-primary">•</span>
+                                <span className="text-brand-primary font-black">•</span>
                                 <span>{mod.optionName}</span>
                                 {mod.price > 0 && (
-                                  <span>(+${mod.price.toFixed(2)})</span>
+                                  <span className="text-brand-primary font-extrabold">(+${mod.price.toFixed(2)})</span>
                                 )}
                               </p>
                             ))}
                           </div>
                         )}
                         {cartItem.note && (
-                          <p className="text-[9px] text-brand-primary font-medium italic mt-1 bg-orange-50/50 px-2 py-0.5 rounded-md border border-orange-100/50">
+                          <p className="text-[10px] text-amber-800 font-bold italic mt-1 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60 inline-block">
                             Note: &ldquo;{cartItem.note}&rdquo;
                           </p>
                         )}
                       </div>
-                      <span className="text-xs font-extrabold text-neutral-700 ml-auto flex-shrink-0">
+                      <span className="text-[13px] font-black text-neutral-900 ml-auto flex-shrink-0">
                         ${cartItem.totalPrice.toFixed(2)}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
-                      <div className="flex items-center gap-2.5 border border-neutral-200 bg-white rounded-lg px-2.5 py-0.5">
+                      <div className="flex items-center gap-2.5 border border-neutral-200 bg-white rounded-lg px-2.5 py-0.5 shadow-2xs">
                         <button
                           onClick={() => decreaseQuantity(cartItem.id)}
                           className="text-neutral-500 hover:text-brand-primary cursor-pointer p-0.5"
                         >
                           <Minus size={10} />
                         </button>
-                        <span className="text-[10px] font-black text-neutral-800 w-3 text-center">
+                        <span className="text-[11px] font-black text-neutral-800 w-3 text-center">
                           {cartItem.quantity}
                         </span>
                         <button
@@ -993,12 +1027,22 @@ export default function HomePage() {
                         </button>
                       </div>
 
-                      <button
-                        onClick={() => removeFromCart(cartItem.id)}
-                        className="text-[9px] font-bold text-neutral-400 hover:text-brand-red cursor-pointer"
-                      >
-                        Remove
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEditCartItem(cartItem)}
+                          title="Edit order customization"
+                          className="text-[10px] font-extrabold text-sky-700 bg-sky-50 hover:bg-sky-100 hover:text-sky-800 px-2 py-0.5 rounded-md border border-sky-200/80 flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Pencil size={10} />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => removeFromCart(cartItem.id)}
+                          className="text-[10px] font-bold text-neutral-400 hover:text-brand-red cursor-pointer px-1 py-0.5"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -1146,8 +1190,9 @@ export default function HomePage() {
       {/* ── PRODUCT CUSTOMIZER DRAWERS ── */}
       <ModifierModal
         item={activeItem}
+        editingCartItem={editingCartItem}
         isOpen={activeItem !== null}
-        onClose={() => setActiveItem(null)}
+        onClose={handleCloseModifierModal}
       />
 
       {/* ── STICKY ACTIVE ORDER WIDGET ── */}
