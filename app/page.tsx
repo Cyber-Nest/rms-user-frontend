@@ -19,6 +19,7 @@ import {
   X,
   ChefHat,
   Pencil,
+  Locate,
 } from "lucide-react";
 import { Category, MenuItem, CartItem } from "../types";
 import { useCart } from "../context/CartContext";
@@ -100,6 +101,8 @@ export default function HomePage() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [autoOpenMap, setAutoOpenMap] = useState(false);
+  const [showStoreDetailsModal, setShowStoreDetailsModal] = useState(false);
+  const [isLocatingAddress, setIsLocatingAddress] = useState(false);
 
   const applyBranchSettings = (branch: BranchStore) => {
     const taxFees = branch.settings?.taxFeesSettings;
@@ -376,6 +379,64 @@ export default function HomePage() {
     }
   };
 
+  const handleFetchCurrentLocation = () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setIsLocatingAddress(true);
+    const toastId = toast.loading("Detecting your location via GPS...");
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const response = await axios.get(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+            {
+              headers: {
+                "Accept-Language": "en-US,en;q=0.9",
+              },
+            }
+          );
+
+          if (response.data && response.data.display_name) {
+            const fullAddress = response.data.display_name;
+            setAddressInput(fullAddress);
+            toast.success("Location detected successfully!", { id: toastId });
+          } else {
+            const fallbackAddr = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+            setAddressInput(fallbackAddr);
+            toast.success("GPS Coordinates captured!", { id: toastId });
+          }
+        } catch (error) {
+          console.error("Error reverse geocoding location:", error);
+          const fallbackAddr = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          setAddressInput(fallbackAddr);
+          toast.success("GPS Location captured!", { id: toastId });
+        } finally {
+          setIsLocatingAddress(false);
+        }
+      },
+      (error) => {
+        console.error("Error getting geolocation:", error);
+        let errorMsg = "Failed to detect location";
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMsg =
+            "Location permission denied. Please allow location access in browser settings.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errorMsg = "Location position unavailable.";
+        } else if (error.code === error.TIMEOUT) {
+          errorMsg = "Location request timed out.";
+        }
+        toast.error(errorMsg, { id: toastId });
+        setIsLocatingAddress(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   if (!selectedBranch) {
     return (
       <StoreLandingView
@@ -460,12 +521,12 @@ export default function HomePage() {
         </div>
 
         {/* Shopping Cart Summary Trigger */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {activeOrder && (
             <button
               type="button"
               onClick={() => setShowStatusModal(true)}
-              className="relative flex items-center gap-1.5 bg-white hover:bg-neutral-50 text-neutral-800 px-3 py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all active:scale-[0.97] cursor-pointer border border-neutral-200/80 shadow-sm whitespace-nowrap"
+              className="relative flex items-center gap-1.5 bg-white hover:bg-neutral-50 text-neutral-800 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black transition-all active:scale-[0.97] cursor-pointer border border-neutral-200/80 shadow-xs whitespace-nowrap"
             >
               <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
@@ -477,7 +538,7 @@ export default function HomePage() {
 
           <button
             onClick={() => setIsCartOpen(!isCartOpen)}
-            className="relative flex items-center gap-2 bg-brand-primary text-white hover:bg-brand-primary-hover px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-[0.97] cursor-pointer shadow-md shadow-brand-primary/10"
+            className="relative flex items-center gap-1.5 sm:gap-2 bg-brand-primary text-white hover:bg-brand-primary-hover px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-black transition-all active:scale-[0.97] cursor-pointer shadow-md shadow-brand-primary/10 flex-shrink-0"
           >
             <ShoppingBag size={14} />
             <span className="hidden sm:inline">My Bag</span>
@@ -490,46 +551,97 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Mobile Address Selection strip */}
-      <div className="md:hidden flex items-center justify-between px-4 py-2.5 bg-brand-primary-light border-b border-brand-primary-muted/20 text-xs shadow-sm">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={() =>
-              setOrderType(orderType === "takeout" ? "delivery" : "takeout")
-            }
-            className="flex-shrink-0 bg-brand-primary text-white text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wider cursor-pointer active:scale-95 transition-transform"
-          >
-            {orderType}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAddressModal(true)}
-            className="flex items-center gap-1.5 text-neutral-700 font-semibold truncate text-[11px] min-w-0 flex-1 cursor-pointer"
-          >
-            <MapPin size={12} className="text-brand-primary flex-shrink-0" />
-            <span className="truncate">
-              {orderType === "delivery"
-                ? address
-                  ? address
-                  : "Set Delivery Address"
-                : "Strathmore Branch Counter"}
-            </span>
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowAddressModal(true)}
-          className="text-[10px] font-black text-brand-primary uppercase tracking-wider ml-3 flex-shrink-0 hover:underline cursor-pointer"
-        >
-          Change
-        </button>
-      </div>
+      {/* ── ULTRA-COMPACT INTEGRATED MOBILE HEADER STRIP (md:hidden) ── */}
+      {selectedBranch && (
+        <div className="md:hidden bg-white/95 backdrop-blur-md border-b border-neutral-200/80 px-3 py-2 shadow-2xs flex flex-col gap-1.5">
+          {/* Row 1: Mode + Address Selection */}
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() =>
+                  setOrderType(orderType === "takeout" ? "delivery" : "takeout")
+                }
+                className="flex-shrink-0 bg-brand-primary text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider cursor-pointer active:scale-95 transition-transform"
+              >
+                {orderType}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddressModal(true)}
+                className="flex items-center gap-1 text-neutral-800 font-bold truncate text-[11px] min-w-0 flex-1 cursor-pointer"
+              >
+                <MapPin size={11} className="text-brand-primary flex-shrink-0" />
+                <span className="truncate">
+                  {orderType === "delivery"
+                    ? address
+                      ? address
+                      : "Set Delivery Address"
+                    : selectedBranch?.name || "Counter Pickup"}
+                </span>
+                <ChevronRight size={11} className="text-neutral-400 flex-shrink-0" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddressModal(true)}
+              className="text-[10px] font-black text-brand-primary uppercase tracking-wider ml-1 flex-shrink-0 hover:underline cursor-pointer"
+            >
+              Change
+            </button>
+          </div>
 
-      {/* ── STORE DETAILS BANNER ── */}
-      <section className="bg-white border-b border-neutral-200 px-4 sm:px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Row 2: Store Name + Quick Status Pill + Info Button */}
+          <div className="flex items-center justify-between gap-2 bg-neutral-50 px-2 py-1 rounded-lg border border-neutral-200/60 text-xs">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <ChefHat size={12} className="text-brand-primary flex-shrink-0" />
+              <span className="text-[11px] font-black text-neutral-900 truncate">
+                {selectedBranch.name}
+              </span>
+              {(() => {
+                const statusInfo = isBranchCurrentlyOpen(selectedBranch);
+                return (
+                  <span
+                    className={`text-[8px] px-1.5 py-0.2 rounded font-extrabold uppercase tracking-wider border ${
+                      statusInfo.isOpen
+                        ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                        : "bg-red-50 text-red-600 border-red-200"
+                    }`}
+                  >
+                    {statusInfo.isOpen ? "Open" : "Closed"}
+                  </span>
+                );
+              })()}
+              <span className="text-[9.5px] text-neutral-500 font-bold flex-shrink-0">
+                · 30-45m
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowStoreDetailsModal(true)}
+                className="p-1 rounded-md text-neutral-500 hover:text-brand-primary hover:bg-neutral-200/60 transition-colors cursor-pointer"
+                title="Store Details"
+              >
+                <Info size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={handleSwitchStoreClick}
+                className="text-[9.5px] font-black text-brand-primary bg-orange-50 hover:bg-orange-100 px-2 py-0.5 rounded-md border border-orange-200/60 transition-colors cursor-pointer"
+              >
+                Switch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DESKTOP STORE DETAILS BANNER (hidden on mobile, visible md+) ── */}
+      <section className="hidden md:flex bg-white border-b border-neutral-200 px-6 py-4 flex-row items-center justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-neutral-50 border border-neutral-200 overflow-hidden flex-shrink-0 hidden sm:block">
+          <div className="w-16 h-16 rounded-2xl bg-neutral-50 border border-neutral-200 overflow-hidden flex-shrink-0">
             <img
               src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=200&auto=format&fit=crop&q=60"
               alt="Restaurant facade"
@@ -581,7 +693,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6 border-t md:border-t-0 border-neutral-100 pt-3 md:pt-0 text-[11px] text-neutral-600 font-semibold">
+        <div className="flex flex-wrap items-center gap-6 border-neutral-100 text-[11px] text-neutral-600 font-semibold">
           {selectedBranch.phone && (
             <div className="flex items-center gap-1.5">
               <Phone size={13} className="text-brand-primary" />
@@ -600,15 +712,15 @@ export default function HomePage() {
       </section>
 
       {/* ── CATEGORY STICKY BAR & SEARCH ── */}
-      <div className="sticky top-[61px] md:top-[63px] z-30 bg-brand-bg border-b border-neutral-200 px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+      <div className="sticky top-[56px] md:top-[63px] z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 px-4 sm:px-6 py-2 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 shadow-xs">
         {/* Category Carousel */}
-        <div className="flex-1 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2">
+        <div className="flex-1 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 scroll-smooth">
           <button
             onClick={() => setSelectedCategory("all")}
-            className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-shrink-0 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-extrabold transition-all cursor-pointer active:scale-95 ${
               selectedCategory === "all"
-                ? "bg-neutral-800 text-white shadow-sm"
-                : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                ? "bg-brand-primary text-white shadow-md shadow-brand-primary/20 scale-[1.02]"
+                : "bg-neutral-100/80 border border-neutral-200/70 text-neutral-700 hover:bg-neutral-200/60"
             }`}
           >
             All Items
@@ -617,10 +729,10 @@ export default function HomePage() {
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-shrink-0 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-extrabold transition-all cursor-pointer active:scale-95 ${
                 selectedCategory === cat.id
-                  ? "bg-neutral-800 text-white shadow-sm"
-                  : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                  ? "bg-brand-primary text-white shadow-md shadow-brand-primary/20 scale-[1.02]"
+                  : "bg-neutral-100/80 border border-neutral-200/70 text-neutral-700 hover:bg-neutral-200/60"
               }`}
             >
               {cat.name}
@@ -630,7 +742,7 @@ export default function HomePage() {
 
         {/* Search & Sort Panel */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="relative w-full sm:w-[180px]">
+          <div className="relative flex-1 sm:flex-none sm:w-[180px]">
             <Search
               className="absolute left-3 top-2.5 text-neutral-400"
               size={13}
@@ -640,14 +752,14 @@ export default function HomePage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search dishes..."
-              className="w-full bg-white border border-neutral-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-neutral-700 placeholder-neutral-400 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10 transition-all"
+              className="w-full bg-neutral-50 sm:bg-white border border-neutral-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-neutral-700 placeholder-neutral-400 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10 transition-all font-semibold"
             />
           </div>
 
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="bg-white border border-neutral-200 rounded-xl px-3 py-1.5 text-xs text-neutral-600 font-bold focus:outline-none focus:border-brand-primary transition-all cursor-pointer"
+            className="bg-neutral-50 sm:bg-white border border-neutral-200 rounded-xl px-2.5 py-1.5 text-xs text-neutral-700 font-extrabold focus:outline-none focus:border-brand-primary transition-all cursor-pointer"
           >
             <option value="popular">Popularity</option>
             <option value="price-low">Price: Low to High</option>
@@ -658,9 +770,17 @@ export default function HomePage() {
       </div>
 
       {/* ── MAIN CONTAINER (SPLIT SCREEN LAYOUT) ── */}
-      <div className="flex-1 flex overflow-hidden p-4 sm:p-6 gap-6 min-h-0">
+      <div className="flex-1 flex items-start p-4 sm:p-6 gap-6 min-h-0">
         {/* LEFT COLUMN: PRODUCT GRID (75% on Desktop) */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+        <div
+          className={`flex-1 flex flex-col min-h-0 transition-all ${
+            activeOrder && cartItems.length > 0
+              ? "pb-48 lg:pb-6"
+              : activeOrder || cartItems.length > 0
+              ? "pb-28 lg:pb-6"
+              : "pb-10 lg:pb-6"
+          }`}
+        >
           {loading ? (
             /* Loading skeletons */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -800,8 +920,8 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* RIGHT COLUMN: PERSISTENT DESKTOP CART (25% on Desktop) */}
-        <aside className="hidden lg:flex w-[28%] flex-col bg-white border border-neutral-200/80 rounded-2xl p-5 shadow-sm h-fit max-h-[85vh]">
+        {/* RIGHT COLUMN: PERSISTENT DESKTOP CART (28% on Desktop, Sticky on Scroll) */}
+        <aside className="hidden lg:flex sticky top-[130px] w-[28%] flex-col bg-white border border-neutral-200/80 rounded-2xl p-5 shadow-sm h-fit max-h-[calc(100vh-150px)] flex-shrink-0 z-20">
           <div className="flex items-center justify-between pb-3.5 border-b border-neutral-200/80 flex-shrink-0">
             <h3 className="text-xs font-black text-neutral-800 flex items-center gap-2">
               <ShoppingBag size={14} className="text-brand-primary" />
@@ -1167,14 +1287,29 @@ export default function HomePage() {
               <label className="block text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
                 Full Delivery Address
               </label>
-              <input
-                type="text"
-                required
-                value={addressInput}
-                onChange={(e) => setAddressInput(e.target.value)}
-                placeholder="E.g. Apt 105, 231 Edgefield Pl, Strathmore, AB"
-                className="w-full bg-white border border-neutral-200 rounded-xl px-3.5 py-2.5 text-xs text-neutral-700 placeholder-neutral-400 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10 transition-all"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  required
+                  value={addressInput}
+                  onChange={(e) => setAddressInput(e.target.value)}
+                  placeholder="E.g. Apt 105, 231 Edgefield Pl, Strathmore, AB"
+                  className="w-full bg-white border border-neutral-200 rounded-xl pl-3.5 pr-28 py-2.5 text-xs text-neutral-700 placeholder-neutral-400 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10 transition-all font-semibold"
+                />
+                <button
+                  type="button"
+                  onClick={handleFetchCurrentLocation}
+                  disabled={isLocatingAddress}
+                  className="absolute right-1.5 flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 text-brand-primary border border-orange-200/80 text-[10px] font-extrabold px-2.5 py-1.5 rounded-lg transition-all active:scale-95 cursor-pointer disabled:opacity-60"
+                  title="Detect live GPS location"
+                >
+                  <Locate
+                    size={13}
+                    className={isLocatingAddress ? "animate-spin" : ""}
+                  />
+                  <span>{isLocatingAddress ? "Locating..." : "Use GPS"}</span>
+                </button>
+              </div>
             </div>
 
             <button
@@ -1197,20 +1332,26 @@ export default function HomePage() {
 
       {/* ── STICKY ACTIVE ORDER WIDGET ── */}
       {activeOrder && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md bg-white/95 backdrop-blur-md border border-neutral-200/80 text-neutral-800 rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3.5 animate-fade-in transition-all duration-300 hover:border-neutral-300/80 hover:shadow-[0_16px_50px_rgba(0,0,0,0.16)] select-none">
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md bg-white/95 backdrop-blur-md border border-neutral-200/80 text-neutral-800 rounded-2xl p-3.5 shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex items-center justify-between gap-2.5 animate-fade-in transition-all duration-300 hover:border-neutral-300/80 hover:shadow-[0_16px_50px_rgba(0,0,0,0.16)] select-none ${
+            cartItems.length > 0 && !isCartOpen
+              ? "bottom-[78px] lg:bottom-6"
+              : "bottom-4 lg:bottom-6"
+          }`}
+        >
           <div
             onClick={() => {
               setAutoOpenMap(false);
               setShowStatusModal(true);
             }}
-            className="flex-1 min-w-0 cursor-pointer flex items-center gap-3"
+            className="flex-1 min-w-0 cursor-pointer flex items-center gap-2.5"
           >
             {/* Status icon with animated pulse */}
-            <div className="relative flex-shrink-0 w-10 h-10 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center">
-              <ShoppingBag size={18} className="text-brand-primary" />
-              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+            <div className="relative flex-shrink-0 w-9 h-9 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center">
+              <ShoppingBag size={16} className="text-brand-primary" />
+              <span className="absolute -top-1 -right-1 flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-primary"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-primary"></span>
               </span>
             </div>
 
@@ -1225,13 +1366,13 @@ export default function HomePage() {
                   {activeOrder.status === "cancelled" && "Cancelled"}
                 </span>
               </div>
-              <h4 className="text-[13px] font-black text-neutral-800 truncate mt-1 leading-snug">
+              <h4 className="text-[12px] font-black text-neutral-800 truncate mt-0.5 leading-snug">
                 {activeOrder.items?.[0]?.name || "Your Order"}
                 {activeOrder.items?.length > 1
                   ? ` + ${activeOrder.items.length - 1} items`
                   : ""}
               </h4>
-              <p className="text-[10px] text-neutral-500 mt-0.5 leading-relaxed truncate">
+              <p className="text-[9.5px] text-neutral-500 mt-0.5 leading-relaxed truncate">
                 {activeOrder.status === "pending" &&
                   "Waiting for branch confirmation"}
                 {activeOrder.status === "preparing" &&
@@ -1242,30 +1383,46 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Right Action */}
-          {activeOrder.orderType === "delivery" &&
-          activeOrder.status === "ready" ? (
+          {/* Right Actions */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {activeOrder.orderType === "delivery" &&
+            activeOrder.status === "ready" ? (
+              <button
+                onClick={() => {
+                  setAutoOpenMap(true);
+                  setShowStatusModal(true);
+                }}
+                className="bg-brand-primary hover:bg-brand-primary-hover text-white text-[10px] font-extrabold py-2 px-3 rounded-xl flex items-center gap-1 shadow-md shadow-brand-primary/20 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+              >
+                <MapPin size={12} className="text-white" />
+                <span>Track Map</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setAutoOpenMap(false);
+                  setShowStatusModal(true);
+                }}
+                className="w-7 h-7 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-600 flex items-center justify-center transition-colors cursor-pointer"
+                title="View Order Details"
+              >
+                <ChevronRight size={15} />
+              </button>
+            )}
+
+            {/* Dismiss/Close Widget Button */}
             <button
-              onClick={() => {
-                setAutoOpenMap(true);
-                setShowStatusModal(true);
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDismissActiveOrder();
               }}
-              className="flex-shrink-0 bg-brand-primary hover:bg-brand-primary-hover text-white text-[11px] font-extrabold py-2.5 px-4 rounded-xl flex items-center gap-1.5 shadow-md shadow-brand-primary/20 hover:shadow-brand-primary/30 transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap"
+              className="w-7 h-7 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer"
+              title="Dismiss Active Order Bar"
             >
-              <MapPin size={13} className="text-white" />
-              <span>Track Map</span>
+              <X size={13} />
             </button>
-          ) : (
-            <button
-              onClick={() => {
-                setAutoOpenMap(false);
-                setShowStatusModal(true);
-              }}
-              className="flex-shrink-0 w-8 h-8 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-500 hover:text-neutral-700 flex items-center justify-center transition-colors cursor-pointer"
-            >
-              <ChevronRight size={16} />
-            </button>
-          )}
+          </div>
         </div>
       )}
 
@@ -1297,6 +1454,126 @@ export default function HomePage() {
           onDismiss={handleDismissActiveOrder}
           autoOpenMap={autoOpenMap}
         />
+      )}
+
+      {/* ── STORE DETAILS MODAL (Mobile & Desktop) ── */}
+      {showStoreDetailsModal && selectedBranch && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Drawer Header */}
+            <div className="relative px-5 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-brand-primary">
+                  <ChefHat size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-neutral-900">
+                    {selectedBranch.name}
+                  </h3>
+                  <p className="text-[10px] text-neutral-500 font-semibold">
+                    Store & Delivery Details
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowStoreDetailsModal(false)}
+                className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-600 transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Drawer Content */}
+            <div className="p-5 space-y-4 text-xs">
+              {/* Opening Status */}
+              <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-neutral-200/60">
+                <div className="flex items-center gap-2">
+                  <Clock size={15} className="text-brand-primary" />
+                  <div>
+                    <p className="font-bold text-neutral-800">Opening Hours</p>
+                    {(() => {
+                      const statusInfo = isBranchCurrentlyOpen(selectedBranch);
+                      return (
+                        <p className="text-[11px] text-neutral-500 font-medium">
+                          {statusInfo.scheduleText}
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
+                {(() => {
+                  const statusInfo = isBranchCurrentlyOpen(selectedBranch);
+                  return (
+                    <span
+                      className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase border ${
+                        statusInfo.isOpen
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                          : "bg-red-50 text-red-600 border-red-200"
+                      }`}
+                    >
+                      {statusInfo.reason}
+                    </span>
+                  );
+                })()}
+              </div>
+
+              {/* Address */}
+              <div className="flex items-start gap-2.5">
+                <MapPin size={15} className="text-brand-primary flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-neutral-800">Address</p>
+                  <p className="text-[11px] text-neutral-600 leading-relaxed">
+                    {selectedBranch.address || "Main Branch Location"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Contact */}
+              {selectedBranch.phone && (
+                <div className="flex items-center gap-2.5">
+                  <Phone size={15} className="text-brand-primary flex-shrink-0" />
+                  <div>
+                    <p className="font-bold text-neutral-800">Contact Number</p>
+                    <a
+                      href={`tel:${selectedBranch.phone}`}
+                      className="text-[11px] text-brand-primary font-semibold hover:underline"
+                    >
+                      {selectedBranch.phone}
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Specs */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-neutral-100">
+                <div className="p-2.5 bg-neutral-50 rounded-lg text-center border border-neutral-100">
+                  <p className="text-[10px] text-neutral-400 font-semibold uppercase">
+                    Est. Delivery
+                  </p>
+                  <p className="text-xs font-black text-neutral-800 mt-0.5">30-45 Mins</p>
+                </div>
+                <div className="p-2.5 bg-neutral-50 rounded-lg text-center border border-neutral-100">
+                  <p className="text-[10px] text-neutral-400 font-semibold uppercase">
+                    Min. Order
+                  </p>
+                  <p className="text-xs font-black text-neutral-800 mt-0.5">$15.00</p>
+                </div>
+              </div>
+
+              {/* Switch Branch CTA */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStoreDetailsModal(false);
+                  handleSwitchStoreClick();
+                }}
+                className="w-full py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white font-black text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
+              >
+                Change Restaurant Location
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

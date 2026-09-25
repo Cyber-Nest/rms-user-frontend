@@ -498,15 +498,18 @@ function CheckoutModalInner({
       />
 
       {/* Slide-over Container */}
-      <div className="relative w-full md:max-w-[34rem] h-[92vh] md:h-full bg-white rounded-t-3xl md:rounded-t-none md:rounded-l-2xl overflow-hidden shadow-2xl flex flex-col z-10 animate-slide-up-mobile md:animate-drawer-slide-in">
+      <div className="relative w-full md:max-w-[34rem] h-[92vh] md:h-full bg-white rounded-t-[28px] md:rounded-t-none md:rounded-l-2xl overflow-hidden shadow-2xl flex flex-col z-10 animate-slide-up-mobile md:animate-drawer-slide-in">
+        {/* Mobile Drag Handle Bar */}
+        <div className="md:hidden w-12 h-1.5 bg-neutral-300 rounded-full mx-auto my-2.5 flex-shrink-0" />
+
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center">
-              <ShoppingBag size={15} className="text-brand-primary" />
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-100 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8.5 h-8.5 bg-orange-50 border border-orange-100/60 rounded-xl flex items-center justify-center shadow-2xs">
+              <ShoppingBag size={16} className="text-brand-primary" />
             </div>
             <div>
-              <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest leading-none">
+              <p className="text-[9.5px] font-black text-neutral-400 uppercase tracking-widest leading-none">
                 Checkout
               </p>
               <h3 className="text-xs font-black text-neutral-900 leading-tight mt-1">
@@ -516,7 +519,7 @@ function CheckoutModalInner({
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 hover:bg-neutral-200 cursor-pointer"
+            className="w-7 h-7 flex items-center justify-center rounded-xl bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 transition-all cursor-pointer active:scale-90"
           >
             <X size={15} />
           </button>
@@ -525,7 +528,7 @@ function CheckoutModalInner({
         {/* Scrollable Form Area */}
         <form
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0 no-scrollbar pb-24"
+          className="flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0 no-scrollbar pb-6"
         >
           {/* Order Mode Toggle */}
           <div className="space-y-2">
@@ -1056,23 +1059,24 @@ function CheckoutModalInner({
         </form>
 
         {/* Footer Fixed Placed Order Action */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-neutral-100 bg-white flex items-center justify-between gap-4 z-20">
+        <div className="p-4 border-t border-neutral-100 bg-white/95 backdrop-blur-md flex items-center justify-between gap-3.5 flex-shrink-0 z-20 shadow-lg">
           <div className="min-w-0">
-            <p className="text-[8px] text-neutral-400 font-extrabold uppercase tracking-wide">
+            <p className="text-[8.5px] text-neutral-400 font-extrabold uppercase tracking-wide">
               Total Order Price
             </p>
-            <p className="text-[14px] font-black text-neutral-800">
+            <p className="text-[15px] font-black text-neutral-900 leading-none mt-0.5">
               ${finalTotal.toFixed(2)}
             </p>
           </div>
 
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={isFormInvalid || isSubmitting || isStripeProcessing}
-            className={`flex-1 py-3.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-3.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer ${
               isFormInvalid || isSubmitting || isStripeProcessing
-                ? "bg-neutral-200 text-neutral-400 cursor-not-allowed shadow-none"
-                : "bg-brand-primary hover:bg-brand-primary-hover text-white shadow-lg shadow-brand-primary/10 active:scale-[0.98] cursor-pointer"
+                ? "bg-neutral-200 text-neutral-400 cursor-not-allowed shadow-none border border-neutral-300/40"
+                : "bg-brand-primary hover:bg-brand-primary-hover text-white shadow-brand-primary/15 active:scale-[0.98]"
             }`}
           >
             {isSubmitting || isStripeProcessing ? (
@@ -1108,7 +1112,7 @@ function CheckoutModalInner({
                 <span>
                   Place {orderType === "delivery" ? "Delivery" : "Pickup"} Order
                 </span>
-                <ArrowRight size={13} strokeWidth={2.5} />
+                <ArrowRight size={13} strokeWidth={3} />
               </>
             )}
           </button>

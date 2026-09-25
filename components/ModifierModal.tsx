@@ -364,7 +364,7 @@ export default function ModifierModal({
         </div>
 
         {/* Options Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {g.displayType === "counter" ? (
             g.options.map((opt) => {
               const groupOpts = selections[g.id] ?? [];
@@ -376,15 +376,15 @@ export default function ModifierModal({
               return (
                 <div
                   key={opt.id}
-                  className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                  className={`flex items-center justify-between p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
                     count > 0
-                      ? "border-brand-primary bg-orange-50/50 ring-1 ring-brand-primary"
-                      : "border-neutral-200 bg-white hover:bg-neutral-50"
+                      ? "border-brand-primary/80 bg-brand-primary/[0.04] ring-1 ring-brand-primary/30"
+                      : "border-neutral-200/80 bg-white hover:bg-neutral-50/80 shadow-2xs"
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-2">
                     {(opt.image || item.image) && (
-                      <div className="w-9 h-9 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200 flex-shrink-0">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl overflow-hidden bg-neutral-100 border border-neutral-200/60 flex-shrink-0 shadow-2xs">
                         <img
                           src={
                             opt.image ||
@@ -401,11 +401,11 @@ export default function ModifierModal({
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold text-neutral-800 truncate">
+                      <p className="text-[12.5px] sm:text-xs font-bold text-neutral-800 truncate">
                         {opt.name}
                       </p>
                       {opt.price > 0 && (
-                        <p className="text-[10px] font-bold text-brand-primary mt-0.5">
+                        <p className="text-[10.5px] font-black text-brand-primary mt-0.5">
                           +${opt.price.toFixed(2)}
                         </p>
                       )}
@@ -413,29 +413,29 @@ export default function ModifierModal({
                   </div>
 
                   {/* Counter Controls */}
-                  <div className="flex items-center gap-1.5 bg-white border border-neutral-200 rounded-lg p-1 flex-shrink-0 shadow-xs">
+                  <div className="flex items-center gap-1.5 sm:gap-2 bg-white border border-neutral-200 rounded-xl p-1 flex-shrink-0 shadow-2xs">
                     <button
                       type="button"
                       onClick={() => handleDecrementCounter(g, opt)}
                       disabled={!canRemove}
-                      className={`w-6 h-6 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                      className={`w-6.5 h-6.5 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
                         canRemove
-                          ? "bg-neutral-100 hover:bg-neutral-200 text-neutral-700 active:scale-95"
+                          ? "bg-neutral-100 hover:bg-neutral-200 text-neutral-800 active:scale-90"
                           : "bg-neutral-50 text-neutral-300 cursor-not-allowed"
                       }`}
                     >
                       <Minus size={11} strokeWidth={2.5} />
                     </button>
-                    <span className="w-4 text-center text-[11px] font-bold text-neutral-800">
+                    <span className="w-4 text-center text-xs font-black text-neutral-900">
                       {count}
                     </span>
                     <button
                       type="button"
                       onClick={() => handleIncrementCounter(g, opt)}
                       disabled={!canAdd}
-                      className={`w-6 h-6 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                      className={`w-6.5 h-6.5 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
                         canAdd
-                          ? "bg-brand-primary hover:bg-brand-primary-hover text-white active:scale-95 shadow-xs"
+                          ? "bg-brand-primary hover:bg-brand-primary-hover text-white active:scale-90 shadow-xs"
                           : "bg-neutral-100 text-neutral-300 cursor-not-allowed"
                       }`}
                     >
@@ -454,70 +454,68 @@ export default function ModifierModal({
                   <button
                     type="button"
                     onClick={() => toggleOption(g, opt)}
-                    className={`relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer active:scale-[0.98] w-full ${
+                    className={`relative flex items-center justify-between p-2.5 sm:p-3 rounded-2xl border text-left transition-all cursor-pointer active:scale-[0.99] w-full ${
                       sel
-                        ? "border-brand-primary bg-orange-50/50 ring-1 ring-brand-primary"
-                        : "border-neutral-200 bg-white hover:bg-neutral-50"
+                        ? "border-brand-primary/80 bg-brand-primary/[0.04] shadow-2xs ring-1 ring-brand-primary/30"
+                        : "border-neutral-200/80 bg-white hover:bg-neutral-50/80 shadow-2xs"
                     }`}
                   >
-                    {/* Select Circle/Box */}
-                    {!isCard && (
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-2">
+                      {/* Checkbox / Radio Circle */}
                       <div
-                        className={`w-4 h-4 border flex items-center justify-center flex-shrink-0 transition-all ${
-                          g.maxSelection === 1 ? "rounded-full" : "rounded"
+                        className={`w-4.5 h-4.5 border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                          g.maxSelection === 1 ? "rounded-full" : "rounded-md"
                         } ${
                           sel
-                            ? "bg-brand-primary border-brand-primary text-white"
+                            ? "bg-brand-primary border-brand-primary text-white scale-105"
                             : "border-neutral-300 bg-white"
                         }`}
                       >
-                        {sel && <Check size={10} strokeWidth={3} />}
+                        {sel && <Check size={11} strokeWidth={3.5} />}
                       </div>
-                    )}
 
-                    {/* Thumbnail Image for Card type or if option has an image */}
-                    {(isCard || !!opt.image) && (
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-neutral-100 border border-neutral-200 flex-shrink-0">
-                        <img
-                          src={
-                            opt.image ||
-                            item.image ||
-                            "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60"
-                          }
-                          alt={opt.name}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60";
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0 pr-4">
-                      <p className="text-[11px] font-semibold text-neutral-800 truncate">
-                        {opt.name}
-                      </p>
-                      {opt.price > 0 && (
-                        <p className="text-[10px] font-bold text-brand-primary mt-0.5">
-                          +${opt.price.toFixed(2)}
-                        </p>
+                      {/* Thumbnail Image */}
+                      {(isCard || !!opt.image) && (
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl overflow-hidden bg-neutral-100 border border-neutral-200/60 flex-shrink-0 shadow-2xs">
+                          <img
+                            src={
+                              opt.image ||
+                              item.image ||
+                              "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60"
+                            }
+                            alt={opt.name}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=150&auto=format&fit=crop&q=60";
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
                       )}
+
+                      {/* Name */}
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`text-[12px] sm:text-xs font-bold leading-tight truncate ${
+                            sel ? "text-neutral-900 font-extrabold" : "text-neutral-800"
+                          }`}
+                        >
+                          {opt.name}
+                        </p>
+                      </div>
                     </div>
 
-                    {/* Top-Right Tick for Cards */}
-                    {isCard && (
-                      <div
-                        className={`absolute top-2 right-2 w-4 h-4 border flex items-center justify-center transition-all ${
-                          g.maxSelection === 1 ? "rounded-full" : "rounded"
-                        } ${
+                    {/* Price Tag Pill on Right */}
+                    {opt.price > 0 && (
+                      <span
+                        className={`text-[10.5px] font-black px-2.5 py-0.5 rounded-full flex-shrink-0 transition-colors ${
                           sel
-                            ? "bg-brand-primary border-brand-primary text-white"
-                            : "border-neutral-300"
+                            ? "bg-brand-primary text-white"
+                            : "bg-neutral-100 text-brand-primary border border-neutral-200/60"
                         }`}
                       >
-                        {sel && <Check size={10} strokeWidth={3} />}
-                      </div>
+                        +${opt.price.toFixed(2)}
+                      </span>
                     )}
                   </button>
                 </div>
@@ -549,52 +547,56 @@ export default function ModifierModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:justify-end select-none">
-      {/* Backdrop */}
+      {/* Backdrop with backdrop-blur */}
       <div
         onClick={onClose}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 bg-black/50 backdrop-blur-md animate-fade-in"
       />
 
       {/* 
         Responsive Drawer Shell
-        - Mobile: Slides up from bottom, occupies h-[88vh], w-full, rounded-t-3xl
-        - Desktop: Slides from right, occupies full height, w-[45rem], rounded-l-2xl
+        - Mobile: Slides up from bottom, rounded-t-[28px], h-[90vh], w-full
+        - Desktop: Slides from right, rounded-l-2xl, h-full, max-w-[46rem]
       */}
-      <div className="relative w-full md:max-w-[46rem] md:h-full bg-white rounded-t-3xl md:rounded-t-none md:rounded-l-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row z-10 h-[88vh] animate-slide-up-mobile md:animate-drawer-slide-in">
+      <div className="relative w-full md:max-w-[46rem] md:h-full bg-white rounded-t-[28px] md:rounded-t-none md:rounded-l-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row z-10 h-[90vh] animate-slide-up-mobile md:animate-drawer-slide-in">
+        
+        {/* Mobile Drag Handle Bar */}
+        <div className="md:hidden w-12 h-1.5 bg-neutral-300 rounded-full mx-auto my-2.5 flex-shrink-0" />
+
         {/* LEFT COLUMN: Customizer Options */}
         <div className="flex-1 flex flex-col bg-white overflow-hidden min-h-0">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 flex-shrink-0">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-100 flex-shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center">
-                <ChefHat size={15} className="text-brand-primary" />
+              <div className="w-8.5 h-8.5 bg-orange-50/80 border border-orange-100/60 rounded-xl flex items-center justify-center shadow-2xs">
+                <ChefHat size={16} className="text-brand-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest leading-none">
-                  Customize
+                <p className="text-[9.5px] font-black text-neutral-400 uppercase tracking-widest leading-none">
+                  {editingCartItem ? "Edit Customization" : "Customize Meal"}
                 </p>
-                <h3 className="text-xs font-black text-neutral-900 leading-tight mt-1 truncate max-w-[200px] sm:max-w-sm">
+                <h3 className="text-sm font-black text-neutral-900 leading-tight mt-1 truncate max-w-[200px] sm:max-w-sm">
                   {item.name}
                 </h3>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-bold text-neutral-400 bg-neutral-50 px-2 py-1 rounded-md border border-neutral-200/40">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] font-black text-neutral-500 bg-neutral-100/80 px-2.5 py-1 rounded-lg border border-neutral-200/50">
                 Group {activeIdx + 1} of {item.modifierGroups?.length ?? 1}
               </span>
               <button
                 onClick={onClose}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 transition-all cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 transition-all cursor-pointer active:scale-90"
               >
                 <X size={15} />
               </button>
             </div>
           </div>
 
-          {/* Modifier Tabs Indicator (Wrapping list) */}
+          {/* Modifier Tabs Indicator (Horizontal Scrollable list) */}
           {item.modifierGroups && item.modifierGroups.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-neutral-100/50 bg-neutral-50/50 flex-shrink-0">
+            <div className="flex overflow-x-auto no-scrollbar gap-2 px-5 py-2.5 border-b border-neutral-100/70 bg-neutral-50/70 flex-shrink-0 scroll-smooth">
               {item.modifierGroups.map((g, i) => {
                 const active = i === activeIdx;
                 const count = (selections[g.id] ?? []).length;
@@ -603,9 +605,9 @@ export default function ModifierModal({
                     key={g.id}
                     id={`mod-tab-${i}`}
                     onClick={() => setActiveIdx(i)}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border text-[10.5px] font-extrabold transition-all cursor-pointer active:scale-95 ${
                       active
-                        ? "bg-brand-primary border-brand-primary text-white shadow-sm"
+                        ? "bg-brand-primary border-brand-primary text-white shadow-md shadow-brand-primary/15 scale-[1.02]"
                         : "bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50"
                     }`}
                   >
