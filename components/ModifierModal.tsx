@@ -78,14 +78,36 @@ export default function ModifierModal({
 
       const init: Record<string, ModifierOption[]> = {};
       const initGroup = (g: ModifierGroup) => {
-        if (!g || !g.options) return;
-        const defs = g.options.filter((o) => o.isDefault);
-        const selected =
-          defs.length > 0
-            ? defs
-            : g.required && g.maxSelection === 1 && g.options.length > 0
-              ? [g.options[0]]
-              : [];
+        if (!g || !g.options || g.options.length === 0) return;
+
+        let selected: ModifierOption[] = [];
+        if (g.displayType === "counter") {
+          const targetCount =
+            g.minSelection > 0
+              ? g.minSelection
+              : g.required && g.maxSelection > 0
+                ? g.maxSelection
+                : 0;
+
+          if (targetCount > 0) {
+            const defs = g.options.filter((o) => o.isDefault);
+            const defaultOpts = defs.length > 0 ? defs : [g.options[0]];
+            for (let i = 0; i < targetCount; i++) {
+              selected.push(defaultOpts[i % defaultOpts.length]);
+            }
+          } else {
+            selected = g.options.filter((o) => o.isDefault);
+          }
+        } else {
+          const defs = g.options.filter((o) => o.isDefault);
+          selected =
+            defs.length > 0
+              ? defs
+              : g.required && g.maxSelection === 1 && g.options.length > 0
+                ? [g.options[0]]
+                : [];
+        }
+
         init[g.id] = selected;
 
         // Recurse nested groups
@@ -249,6 +271,10 @@ export default function ModifierModal({
   const isValid = () =>
     allActiveGroups.every((g) => {
       const count = (selections[g.id] ?? []).length;
+      if (g.displayType === "counter") {
+        const minReq = g.required ? 1 : 0;
+        return count >= minReq;
+      }
       return count >= g.minSelection && count <= g.maxSelection;
     });
 
@@ -256,9 +282,20 @@ export default function ModifierModal({
     let modSum = 0;
     allActiveGroups.forEach((g) => {
       const selectedOpts = selections[g.id] ?? [];
-      selectedOpts.forEach((o) => {
-        modSum += o.price;
-      });
+      if (g.displayType === "counter" && g.minSelection > 0) {
+        let freeCount = g.minSelection;
+        selectedOpts.forEach((o) => {
+          if (freeCount > 0) {
+            freeCount--;
+          } else {
+            modSum += o.price;
+          }
+        });
+      } else {
+        selectedOpts.forEach((o) => {
+          modSum += o.price;
+        });
+      }
     });
     return (item.price + modSum) * quantity;
   };
@@ -288,31 +325,67 @@ export default function ModifierModal({
     allActiveGroups.forEach((g) => {
       const isRoot = item.modifierGroups?.some((rg) => rg.id === g.id) ?? false;
       const opts = selections[g.id] ?? [];
-
-      const counts = opts.reduce((acc, o) => {
-        acc[o.id] = (acc[o.id] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const uniqueOpts = Array.from(
-        new Set(opts.map((o) => o.id))
-      ).map((id) => opts.find((o) => o.id === id)!);
-
       const parentInfo = parentMap.get(g.id);
 
-      uniqueOpts.forEach((o) => {
-        selectedMods.push({
-          groupId: g.id,
-          groupName: g.name,
-          optionId: o.id,
-          optionName: o.name,
-          price: o.price,
-          quantity: counts[o.id],
-          isRoot,
-          parentOptionId: parentInfo?.parentOptId,
-          parentOptionName: parentInfo?.parentOptName,
+      if (g.displayType === "counter" && g.minSelection > 0) {
+        let freeCount = g.minSelection;
+        const optionDetails: Record<
+          string,
+          { opt: ModifierOption; freeQty: number; paidQty: number }
+        > = {};
+
+        opts.forEach((o) => {
+          if (!optionDetails[o.id]) {
+            optionDetails[o.id] = { opt: o, freeQty: 0, paidQty: 0 };
+          }
+          if (freeCount > 0) {
+            freeCount--;
+            optionDetails[o.id].freeQty += 1;
+          } else {
+            optionDetails[o.id].paidQty += 1;
+          }
         });
-      });
+
+        Object.values(optionDetails).forEach(({ opt, freeQty, paidQty }) => {
+          const totalQty = freeQty + paidQty;
+          if (totalQty > 0) {
+            selectedMods.push({
+              groupId: g.id,
+              groupName: g.name,
+              optionId: opt.id,
+              optionName: opt.name,
+              price: paidQty * opt.price,
+              quantity: totalQty,
+              isRoot,
+              parentOptionId: parentInfo?.parentOptId,
+              parentOptionName: parentInfo?.parentOptName,
+            });
+          }
+        });
+      } else {
+        const counts = opts.reduce((acc, o) => {
+          acc[o.id] = (acc[o.id] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        const uniqueOpts = Array.from(
+          new Set(opts.map((o) => o.id))
+        ).map((id) => opts.find((o) => o.id === id)!);
+
+        uniqueOpts.forEach((o) => {
+          selectedMods.push({
+            groupId: g.id,
+            groupName: g.name,
+            optionId: o.id,
+            optionName: o.name,
+            price: o.price * counts[o.id],
+            quantity: counts[o.id],
+            isRoot,
+            parentOptionId: parentInfo?.parentOptId,
+            parentOptionName: parentInfo?.parentOptName,
+          });
+        });
+      }
     });
 
     if (editingCartItem) {
@@ -370,7 +443,8 @@ export default function ModifierModal({
               const groupOpts = selections[g.id] ?? [];
               const count = groupOpts.filter((o) => o.id === opt.id).length;
               const totalGroupCount = groupOpts.length;
-              const canAdd = totalGroupCount < g.maxSelection;
+              const maxAllowed = g.displayType === "counter" ? 99 : g.maxSelection;
+              const canAdd = totalGroupCount < maxAllowed;
               const canRemove = count > 0;
 
               return (
@@ -404,10 +478,22 @@ export default function ModifierModal({
                       <p className="text-[12.5px] sm:text-xs font-bold text-neutral-800 truncate">
                         {opt.name}
                       </p>
-                      {opt.price > 0 && (
-                        <p className="text-[10.5px] font-black text-brand-primary mt-0.5">
-                          +${opt.price.toFixed(2)}
-                        </p>
+                      {g.displayType === "counter" ? (
+                        totalGroupCount >= g.maxSelection && opt.price > 0 ? (
+                          <p className="text-[10.5px] font-black text-brand-primary mt-0.5">
+                            +${opt.price.toFixed(2)} / extra
+                          </p>
+                        ) : (
+                          <p className="text-[10.5px] font-bold text-emerald-600 mt-0.5">
+                            Free
+                          </p>
+                        )
+                      ) : (
+                        opt.price > 0 && (
+                          <p className="text-[10.5px] font-black text-brand-primary mt-0.5">
+                            +${opt.price.toFixed(2)}
+                          </p>
+                        )
                       )}
                     </div>
                   </div>
@@ -768,10 +854,37 @@ export default function ModifierModal({
                           <span className="text-neutral-700 font-medium">
                             {o.name} {qty > 1 ? `(x${qty})` : ""}
                           </span>
-                          {o.price > 0 && (
-                            <span className="text-[9.5px] text-neutral-400 ml-auto">
-                              +${(o.price * qty).toFixed(2)}
-                            </span>
+                          {g.displayType === "counter" && g.maxSelection > 0 ? (
+                            (() => {
+                              let freeLeft = g.maxSelection;
+                              let paidQtyForOpt = 0;
+                              opts.forEach((selectedOpt) => {
+                                if (freeLeft > 0) {
+                                  freeLeft--;
+                                } else if (selectedOpt.id === o.id) {
+                                  paidQtyForOpt++;
+                                }
+                              });
+                              const extraCost = paidQtyForOpt * o.price;
+                              if (extraCost > 0) {
+                                return (
+                                  <span className="text-[9.5px] text-neutral-400 ml-auto font-bold">
+                                    +${extraCost.toFixed(2)}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="text-[9.5px] text-emerald-600 ml-auto font-bold">
+                                  Free
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            o.price > 0 && (
+                              <span className="text-[9.5px] text-neutral-400 ml-auto">
+                                +${(o.price * qty).toFixed(2)}
+                              </span>
+                            )
                           )}
                         </div>
                       );
