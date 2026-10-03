@@ -808,9 +808,11 @@ export default function ModifierModal({
                 <h4 className="text-[11px] font-bold text-neutral-800 leading-none truncate">
                   {item.name}
                 </h4>
-                <p className="text-[10px] font-semibold text-brand-primary mt-1.5">
-                  Base Price: ${item.price.toFixed(2)}
-                </p>
+                {item.price > 0 && (
+                  <p className="text-[10px] font-semibold text-brand-primary mt-1.5">
+                    Base Price: ${item.price.toFixed(2)}
+                  </p>
+                )}
               </div>
             </div>
 

@@ -867,14 +867,18 @@ export default function HomePage() {
                       {/* Pricing & CTA Button */}
                       <div className="flex justify-between items-center mt-1 border-t border-neutral-50 pt-2 sm:pt-2.5">
                         <div>
-                          <p className="text-[8.5px] sm:text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
-                            Price
-                          </p>
-                          <p
-                            className={`text-[12px] sm:text-[14px] font-black ${isOutOfStock ? "text-neutral-400" : "text-neutral-800"}`}
-                          >
-                            ${item.price.toFixed(2)}
-                          </p>
+                          {item.price > 0 && (
+                            <>
+                              <p className="text-[8.5px] sm:text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                                Price
+                              </p>
+                              <p
+                                className={`text-[12px] sm:text-[14px] font-black ${isOutOfStock ? "text-neutral-400" : "text-neutral-800"}`}
+                              >
+                                ${item.price.toFixed(2)}
+                              </p>
+                            </>
+                          )}
                         </div>
                         <button
                           onClick={() =>
